@@ -15,6 +15,10 @@ Plum Market runs a small store at Gate A36 in the McNamara Terminal at Detroit M
 
 There's no point-of-sale data behind this and no historical sales to fit against. That's on purpose. The goal isn't forecast accuracy, it's proving the mechanism: that a store's busy and quiet hours are already visible in a flight schedule, before anyone hands over sales data to calibrate it. Click any bar and you see the real aircraft, seat counts, and gates driving that hour. Nothing on screen is a black box.
 
+<p align="center">
+  <img src="docs/screenshots/range-desktop.png" width="100%" alt="14-day range view, showing a bar per day with a demand tier and a peak-day stat card" />
+</p>
+
 ## The three-layer split
 
 ```
@@ -67,6 +71,22 @@ Two views, phone-first, no charting library. Bars are hand-rolled SVG and CSS be
 - **18-hour day view**, one tap into any day. Fits the store's actual open hours on one screen, no scrolling, ever, since bar height is computed from available space rather than a fixed pixel value.
 - **Tap a hour, then tap a flight** to reach the raw math behind it: aircraft type, seats, load factor, gate, and the estimated share of passengers walking past A36. This drill-down is the credibility mechanism. The forecast is only convincing if anyone can check its work.
 
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/day-desktop.png" alt="18-hour day view with breakfast, lunch, and dinner section labels and a peak-time stat card" /></td>
+<td width="50%"><img src="docs/screenshots/flight-desktop.png" alt="Flight drill-down showing route, aircraft, load factor, and the passengers-past-A36 math for one flight" /></td>
+</tr>
+<tr>
+<td>Day view: daypart is a hairline and a label, never a bar color.</td>
+<td>Depth 3: the raw math behind one flight, not just a bar.</td>
+</tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/range-mobile.png" width="320" alt="The same 14-day view on a phone-sized screen, unchanged layout" />
+</p>
+<p align="center"><em>Same layout at every breakpoint, since this doubles as the mobile reporting view.</em></p>
+
 ## Stack
 
 - **SQL Server 2022** for ingest, modeling, and export. Four schemas: `stg` (untouched raw ingest), `cfg` (every tunable constant), `mdl` (the exposure model, views only), `export` (the one procedure that shapes the JSON).
@@ -82,6 +102,7 @@ scripts/               nightly ingest + export + commit pipeline (bash + sqlcmd)
 src/                   the front end (TypeScript, hand-rolled SVG/CSS charts)
 public/data/forecast.json   the committed artifact the site reads, always kept fresh or stale, never blank
 docs/BRIEF.md          the full project brief this was built against
+docs/screenshots/      the images above
 ```
 
 ## Running it

@@ -88,6 +88,7 @@ INSERT INTO cfg.SeatsByAircraftType (AircraftModelCode, AircraftModelText, Seats
     ('E190', 'Embraer E190',            97),
     ('E75L', 'Embraer E175',            76),
     ('E75S', 'Embraer E175 (short)',    76),
+    ('B737', 'Boeing 737 (generic/unspecified variant)', 140),
     ('UNKNOWN', 'Unrecognized aircraft type (fallback)', 150);
 GO
 
@@ -279,7 +280,44 @@ INSERT INTO cfg.AirportCity (IataCode, City) VALUES
     ('SJU', 'San Juan'),
     ('NAS', 'Nassau'),
     ('MBJ', 'Montego Bay'),
-    ('PTY', 'Panama City');
+    ('PTY', 'Panama City'),
+    -- Added after a live-data audit turned up these codes on real flights
+    -- (regional airports, and international routes wider than the original
+    -- hand-picked list anticipated).
+    ('ALB', 'Albany'),
+    ('AMM', 'Amman'),
+    ('ANC', 'Anchorage'),
+    ('APN', 'Alpena'),
+    ('ATW', 'Appleton'),
+    ('AZO', 'Kalamazoo'),
+    ('BDL', 'Hartford'),
+    ('BGM', 'Binghamton'),
+    ('BTV', 'Burlington'),
+    ('CIU', 'Sault Ste. Marie'),
+    ('ELM', 'Elmira'),
+    ('ESC', 'Escanaba'),
+    ('FWA', 'Fort Wayne'),
+    ('HND', 'Tokyo'),
+    ('HNL', 'Honolulu'),
+    ('HPN', 'White Plains'),
+    ('HVN', 'New Haven'),
+    ('ICN', 'Seoul'),
+    ('IMT', 'Iron Mountain'),
+    ('IST', 'Istanbul'),
+    ('LEX', 'Lexington'),
+    ('MBS', 'Saginaw'),
+    ('MDT', 'Harrisburg'),
+    ('MEX', 'Mexico City'),
+    ('MQT', 'Marquette'),
+    ('MTY', 'Monterrey'),
+    ('PLN', 'Pellston'),
+    ('PVG', 'Shanghai'),
+    ('PWM', 'Portland'),
+    ('QRO', 'Queretaro'),
+    ('SBN', 'South Bend'),
+    ('SNA', 'Santa Ana'),
+    ('TVC', 'Traverse City'),
+    ('YHZ', 'Halifax');
 GO
 
 -- All-cargo operators seen at DTW (or plausible there) to exclude at

@@ -1,6 +1,7 @@
 import type { Day, Daypart, Flight, Forecast } from "./lib/types";
 import {
   demandTier,
+  formatAirlineName,
   formatDateRange,
   formatDayTitle,
   formatDuration,
@@ -516,7 +517,7 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
           <span class="flight-nav-id">
             ${airlineBadge(f)}
             <span class="detail__nav-labels detail__nav-labels--flight">
-              <span class="detail__nav-secondary">${f.airline}</span>
+              <span class="detail__nav-secondary">${formatAirlineName(f.airline)}</span>
               <span class="detail__nav-primary">${f.flightNumber}</span>
             </span>
           </span>

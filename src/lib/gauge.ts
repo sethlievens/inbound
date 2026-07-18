@@ -22,7 +22,7 @@ function arcPath(cx: number, cy: number, r: number, fromDeg: number, toDeg: numb
 
 export function renderGauge(value: number, max: number): string {
   const ratio = max > 0 ? Math.min(1, value / max) : 0;
-  const cx = 100;
+  const cx = 135;
   const cy = 120;
   const r = 74;
   // Ticks need clearance from the arc's own stroke (outer edge at r + half
@@ -31,15 +31,17 @@ export function renderGauge(value: number, max: number): string {
   // enough that both matter. cy moved down and the viewBox grew taller
   // (below) to open up real headroom above the arc for that.
   //
-  // The bigger source of overlap turned out not to be radius at all,
-  // though: the side ticks' text-anchor used to point the wrong way, so
-  // "0" and the max label grew back in *toward* the arc from their anchor
-  // point instead of away from it — no radial offset fixes that, since a
-  // long enough label (e.g. "155+") would eventually reach the line
-  // regardless of how far out its anchor point sits. Anchoring "0" at its
-  // end and the max label at its start (below) means both grow away from
-  // the arc, so their distance from it is always exactly tickR, however
-  // many digits they are.
+  // The bigger source of overlap wasn't radius at all, though: the side
+  // ticks' text-anchor used to point the wrong way, so "0" and the max
+  // label grew back in *toward* the arc from their anchor point instead
+  // of away from it. Anchoring "0" at its end and the max label at its
+  // start (below) means both grow away from the arc — but that only works
+  // if there's actually room on the *outside* to grow into. The max label
+  // ("178+", four characters) was getting hard-clipped by the viewBox's
+  // own right edge, because the side ticks' anchor points sat only ~5
+  // units from it. cx moved right and the viewBox grew wider (below) to
+  // give ~40 units of clearance on each side — enough for a label several
+  // characters longer than anything this dataset actually produces.
   const tickR = r + 21;
   const trackPath = arcPath(cx, cy, r, 180, 0);
   const fillPath = arcPath(cx, cy, r, 180, 180 - 180 * ratio);
@@ -49,7 +51,7 @@ export function renderGauge(value: number, max: number): string {
 
   return `
     <div class="gauge-wrap">
-      <svg class="gauge" viewBox="0 0 200 134" role="img" aria-label="Gauge: ${Math.round(value)} of ${Math.round(max)}">
+      <svg class="gauge" viewBox="0 0 270 134" role="img" aria-label="Gauge: ${Math.round(value)} of ${Math.round(max)}">
         <path class="gauge__track" d="${trackPath}" fill="none" stroke-width="14" stroke-linecap="round" />
         <path class="gauge__fill" d="${fillPath}" fill="none" stroke-width="14" stroke-linecap="round" />
         <text class="gauge__tick" x="${startTick.x.toFixed(1)}" y="${startTick.y.toFixed(1)}" text-anchor="end">0</text>

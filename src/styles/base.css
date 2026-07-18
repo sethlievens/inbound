@@ -715,7 +715,12 @@ button {
 .gauge-wrap {
   position: relative;
   flex: 0 0 auto;
-  width: 130px;
+  /* 176px keeps the same rendered scale as before (0.65x) against the
+     gauge's new 270-wide viewBox — widened in gauge.ts to give the tick
+     labels room to grow outward without hitting the edge. Widening the
+     viewBox without widening this would shrink the rendered text back
+     down, undoing the legibility fix. */
+  width: 176px;
 }
 
 .gauge {
@@ -1340,7 +1345,7 @@ button {
   }
 
   .gauge-wrap {
-    width: 110px;
+    width: 149px;
   }
 
   .gauge__readout-value {

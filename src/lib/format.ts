@@ -96,6 +96,18 @@ export function geometryWeightTier(w: number): DemandTier {
   return { label: "Low", className: "tier-low" };
 }
 
+/** Strips a trailing livery/edition annotation ("(jo jo the bear livery)",
+ * "(retro livery)", "(fifa world cup 2026 livery)") and title-cases the
+ * result. Real airlines fly real special-edition paint jobs, and Aviation
+ * Edge names the airline after the livery when that's what's scheduled —
+ * charming, but out of place next to the rest of the app's plain carrier
+ * names, and one raw string had no space before the parenthesis at all
+ * ("frontier(...)"), which this normalizes away along with the rest. */
+export function formatAirlineName(name: string): string {
+  const stripped = name.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  return stripped.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function formatGeneratedAt(iso: string): string {
   const d = new Date(iso.endsWith("Z") ? iso : `${iso}Z`);
   const y = d.getUTCFullYear();
