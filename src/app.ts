@@ -33,7 +33,7 @@ const TERM_INFO: Record<string, string> = {
   dayIndex:
     "100 is an average day's total volume. Compared against a fixed 18-hour reference day, so a day open fewer hours (like Sunday) correctly reads lower — that's less total volume, not weaker demand per hour.",
   loadFactor:
-    "Share of seats filled, 0 to 1. The one modeled assumption in this forecast — everything else comes from the flight schedule. Shown as a flat assumption in the footer rather than an adjustable control.",
+    "Share of seats filled, 0 to 1. The one modeled assumption in this forecast — everything else comes from the flight schedule. The footer shows the baseline; this flight's own value is that baseline adjusted for season and time of day, not an adjustable control.",
   geometryWeight:
     "Estimated share of this gate's passengers who walk past A36, based on where the gate sits in the concourse.",
   passengersPastA36:
@@ -49,11 +49,6 @@ function infoTip(term: keyof typeof TERM_INFO, label: string, align: "left" | "r
   `;
 }
 
-/** Carrier code straight from the flight number ("DL1042" -> "DL"). */
-function carrierCode(flightNumber: string): string {
-  return flightNumber.match(/^[A-Z]+/)?.[0] ?? "?";
-}
-
 // Self-hosted widget marks (public/airlines/), not hotlinked. Only Delta is
 // wired up since the demo dataset is Delta-only; any other carrier code
 // falls back to a plain text badge rather than a missing-image icon.
@@ -61,8 +56,15 @@ const AIRLINE_LOGOS: Record<string, string> = {
   DL: "/airlines/delta.svg",
 };
 
-function airlineBadge(flightNumber: string): string {
-  const code = carrierCode(flightNumber);
+/** Badge/logo keyed off the flight's own airlineIataCode, straight from
+ * stg.Flight, not guessed from the flight number. A regex on the flight
+ * number (stripping non-letter characters from the front) used to do this
+ * and quietly broke for any carrier whose IATA code starts with a digit —
+ * UPS ("5X") and Aeromexico Connect ("5D") both do, and both fly into DTW,
+ * so real flights were showing a bare "?" badge instead of a carrier code
+ * the database already had on hand. */
+function airlineBadge(f: Flight): string {
+  const code = f.airlineIataCode || "?";
   const logo = AIRLINE_LOGOS[code];
   return logo
     ? `<span class="flight-row__badge flight-row__badge--logo"><img src="${logo}" alt="${code}" /></span>`
@@ -268,7 +270,12 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
       statValueEl.textContent = formatHourRange(day.peakHour);
       peakIndex = day.hours.find((h) => h.hour === day.peakHour)?.index ?? 0;
     }
-    statTierEl.textContent = `${Math.round(peakIndex)} · ${demandTier(1, false).label}`;
+    // This card shows the actual peak day/hour, so its tier is always
+    // "Peak" (isPeak=true) — the same label the peak bar itself gets
+    // everywhere else in the app. A stray hardcoded `false` here used to
+    // make this always read "Very high demand" instead, regardless of
+    // what the peak day/hour actually was.
+    statTierEl.textContent = `${Math.round(peakIndex)} · ${demandTier(1, true).label}`;
   }
 
   // ---------- breadcrumb: hierarchy with a way back out at every level ----------
@@ -507,7 +514,7 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
       <div class="detail__nav">
         <div class="detail__nav-group detail__nav-group--flight">
           <span class="flight-nav-id">
-            ${airlineBadge(f.flightNumber)}
+            ${airlineBadge(f)}
             <span class="detail__nav-labels detail__nav-labels--flight">
               <span class="detail__nav-secondary">${f.airline}</span>
               <span class="detail__nav-primary">${f.flightNumber}</span>
@@ -605,7 +612,7 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
                   <tr tabindex="0" role="button" data-flight-id="${f.flightId}" aria-label="${f.flightNumber} details">
                     <td>
                       <div class="flight-row__id">
-                        ${airlineBadge(f.flightNumber)}
+                        ${airlineBadge(f)}
                         <span>
                           ${f.flightNumber}
                           <div class="flight-row__meta">${f.aircraftType}</div>
@@ -671,10 +678,14 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
       </div>
 
       <div class="stat-mini-row">
-        <div class="stat-mini">
-          <span class="stat-mini__label">${statIcon("aircraft")}Aircraft</span>
-          <span class="stat-mini__value">${f.aircraftType}</span>
-        </div>
+        ${
+          f.aircraftType !== ""
+            ? `<div class="stat-mini">
+                <span class="stat-mini__label">${statIcon("aircraft")}Aircraft</span>
+                <span class="stat-mini__value">${f.aircraftType}</span>
+              </div>`
+            : ""
+        }
         ${
           f.gate !== ""
             ? `<div class="stat-mini">
@@ -749,7 +760,13 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
     );
     const isStale = Date.now() - generated.getTime() > STALE_THRESHOLD_MS;
     footerEl.classList.toggle("is-stale", isStale);
-    footerEl.innerHTML = `<span aria-hidden="true">🕐</span> Generated ${formatGeneratedAt(state.forecast.generatedAt)} · Load factor ${Math.round(state.forecast.defaultLoadFactor * 100)}% assumed`;
+    // "Baseline", not "assumed" — the per-flight load factor shown in the
+    // drill-down is this number adjusted by season and daypart, and can
+    // visibly differ from it (a July dinner flight runs closer to 90%).
+    // Calling the baseline itself "assumed" implied it was the one number
+    // used everywhere, which isn't true and was an easy thing to catch by
+    // comparing this line to any individual flight's own stat.
+    footerEl.innerHTML = `<span aria-hidden="true">🕐</span> Generated ${formatGeneratedAt(state.forecast.generatedAt)} · Load factor ${Math.round(state.forecast.defaultLoadFactor * 100)}% baseline`;
   }
 
   // ---------- top-level dispatch ----------

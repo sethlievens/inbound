@@ -55,7 +55,18 @@ BEGIN
         TRY_CONVERT(DATETIME2(0), CONVERT(VARCHAR(10), @RequestedDate, 120) + ' ' + DtwTimeText + ':00') AS DtwScheduledTime
     INTO #Operating
     FROM Raw
-    WHERE CodesharedFlag IS NULL;
+    WHERE CodesharedFlag IS NULL
+      -- Aviation Edge's future-schedules endpoint doesn't distinguish
+      -- passenger from freight service. Without this, a FedEx or UPS
+      -- freighter matches the same aircraft-type seat lookup as a
+      -- passenger flight and gets credited with real seats and a real
+      -- load factor — a fictitious passenger count for a flight that
+      -- carries none. See cfg.CargoAirline.
+      AND NOT EXISTS (
+          SELECT 1 FROM cfg.CargoAirline ca
+          WHERE UPPER(ca.AirlineName) = UPPER(Raw.AirlineName)
+             OR (ca.IataCode IS NOT NULL AND ca.IataCode = Raw.AirlineIataCode)
+      );
 
     -- Duration isn't in this endpoint at all (no elapsed time, and the
     -- bare HH:MM times aren't enough to derive one without knowing both

@@ -192,3 +192,15 @@ CREATE TABLE cfg.AirportCity (
     City     VARCHAR(50) NOT NULL
 );
 GO
+
+-- Known all-cargo/freight operators to exclude at ingest. Aviation Edge's
+-- future-schedules endpoint doesn't distinguish passenger from freight
+-- service, so without this a FedEx or UPS freighter reads as a passenger
+-- flight and gets credited with real seats and a real load factor. Small
+-- feeder/freight carriers (e.g. Suburban Air Freight) often have no IATA
+-- code at all, so matching is by name OR code, whichever the ingest has.
+CREATE TABLE cfg.CargoAirline (
+    AirlineName VARCHAR(50) NOT NULL PRIMARY KEY,
+    IataCode    VARCHAR(5)  NULL
+);
+GO

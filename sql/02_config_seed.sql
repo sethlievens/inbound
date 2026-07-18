@@ -138,14 +138,32 @@ INSERT INTO cfg.DwellCurve (Direction, OffsetMinFrom, OffsetMinTo, PeakOffsetMin
     ('arrival',     0,  20,   5);
 GO
 
--- Placeholder baseline — replaced once the demo flight seed exists and an
--- actual trailing average can be computed (see 03_demo_flight_seed.sql's
--- companion UPDATE at the bottom). ReferenceOpenHours=18 matches the
--- weekday-standard day length, so Sunday's shorter day reads as lower
--- total volume rather than being normalized away.
+-- Placeholder baseline — 1.0 is not a real average, it exists only so the
+-- database is queryable before a real one is calibrated. ReferenceOpenHours
+-- =18 matches the weekday-standard day length, so Sunday's shorter day
+-- reads as lower total volume rather than being normalized away.
+--
+-- WARNING: re-running this script against a database that already has a
+-- calibrated baseline resets it back to this placeholder (TRUNCATE, same
+-- as every other table here) — and because HourlyIndex/DayRollup divide by
+-- it directly, every index value on the site instantly goes from ~100 to
+-- five/six digits. This happened once. Recalibrate immediately after
+-- reseeding, before generating another export, with:
+--
+--   ;WITH OpenHourTraffic AS (
+--       SELECT ht.HourlyExposure FROM mdl.HourlyTraffic ht
+--       JOIN cfg.OpenHours oh ON oh.DayOfWeek = DATEPART(WEEKDAY, ht.TrafficDate) - 1
+--           AND ht.TrafficHour BETWEEN oh.OpenHour AND oh.CloseHour - 1
+--   )
+--   UPDATE cfg.IndexBaseline SET BaselineHourlyExposure = (SELECT AVG(HourlyExposure) FROM OpenHourTraffic);
+--
+-- (SET DATEFIRST 7 first, so the DayOfWeek join lines up with cfg.OpenHours'
+-- 0=Sunday convention.) Run it against whatever's currently in stg.Flight —
+-- make sure that's the real live window and not stale rows from a prior
+-- demo seed, which will skew the average.
 TRUNCATE TABLE cfg.IndexBaseline;
 INSERT INTO cfg.IndexBaseline (BaselineHourlyExposure, ReferenceOpenHours, EffectiveFrom, Note) VALUES
-    (1.0, 18, '2026-07-18', 'placeholder — recomputed after demo flight seed loads');
+    (1.0, 18, '2026-07-18', 'placeholder — recalibrate from mdl.HourlyTraffic before exporting, see comment above');
 GO
 
 -- City names for the flight-detail route card. Aviation Edge gives IATA
@@ -262,4 +280,27 @@ INSERT INTO cfg.AirportCity (IataCode, City) VALUES
     ('NAS', 'Nassau'),
     ('MBJ', 'Montego Bay'),
     ('PTY', 'Panama City');
+GO
+
+-- All-cargo operators seen at DTW (or plausible there) to exclude at
+-- ingest — see cfg.CargoAirline's schema comment. Matched by IataCode when
+-- the carrier has one; small feeder freight operators mostly don't, so
+-- those rely on an exact name match instead.
+TRUNCATE TABLE cfg.CargoAirline;
+INSERT INTO cfg.CargoAirline (AirlineName, IataCode) VALUES
+    ('fedex',                    'FX'),
+    ('fedex express',            'FX'),
+    ('ups',                      '5X'),
+    ('ups airlines',             '5X'),
+    ('atlas air',                '5Y'),
+    ('kalitta air',              'K4'),
+    ('abx air',                  'GB'),
+    ('amerijet international',   'M6'),
+    ('suburban air freight',     NULL),
+    ('mountain air cargo',       NULL),
+    ('empire airlines',          NULL),
+    ('baron aviation services',  NULL),
+    ('csa air',                  NULL),
+    ('wiggins airways',          NULL),
+    ('berry aviation',           NULL);
 GO

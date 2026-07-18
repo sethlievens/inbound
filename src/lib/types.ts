@@ -7,6 +7,7 @@ export type Daypart = "breakfast" | "lunch" | "dinner" | "off";
 export interface Flight {
   flightId: number;
   airline: string;
+  airlineIataCode: string;
   flightNumber: string;
   direction: Direction;
   scheduledTime: string;

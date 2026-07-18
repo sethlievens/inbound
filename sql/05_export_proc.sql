@@ -118,6 +118,7 @@ BEGIN
                             SELECT
                                 fhd.FlightId AS flightId,
                                 fhd.AirlineName AS airline,
+                                fhd.AirlineIataCode AS airlineIataCode,
                                 fhd.FlightNumber AS flightNumber,
                                 fhd.Direction AS direction,
                                 fhd.DtwScheduledTime AS scheduledTime,

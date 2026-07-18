@@ -21,9 +21,23 @@ WITH BestHistoricalGate AS (
     -- number has actually been seen at most often in past ingests — see
     -- stg.GateHistory. ROW_NUMBER picks the single best-observed gate per
     -- flight number/direction so the join below can't fan out multiple rows.
+    --
+    -- Checked against real accumulated history: gate assignment at DTW is
+    -- much less stable per flight number than this mechanism assumed —
+    -- about half of flight number/direction pairs have already been seen
+    -- at more than one gate, and for those, the top pick is only right
+    -- about 53% of the time on average (as low as 25% for some flights).
+    -- A confident-sounding single gate that's more likely wrong than right
+    -- is worse than no gate at all, so Confidence gates whether the join
+    -- below trusts this pick: only when the top gate accounts for at least
+    -- 60% of that flight's observed history. Below that, the flight falls
+    -- through to blank gate and the honest 'unknown' zone average instead
+    -- of a specific guess dressed up as a fact.
     SELECT
         FlightNumber, Direction, Gate,
-        ROW_NUMBER() OVER (PARTITION BY FlightNumber, Direction ORDER BY ObservedCount DESC, LastSeenAt DESC) AS rn
+        ROW_NUMBER() OVER (PARTITION BY FlightNumber, Direction ORDER BY ObservedCount DESC, LastSeenAt DESC) AS rn,
+        CAST(ObservedCount AS DECIMAL(9,4))
+            / SUM(ObservedCount) OVER (PARTITION BY FlightNumber, Direction) AS Confidence
     FROM stg.GateHistory
 ),
 Parsed AS (
@@ -31,6 +45,7 @@ Parsed AS (
         f.FlightId,
         f.Direction,
         f.AirlineName,
+        f.AirlineIataCode,
         f.FlightNumber,
         f.AircraftModelCode,
         f.DtwGate,
@@ -42,7 +57,8 @@ Parsed AS (
         MONTH(f.DtwScheduledTime) AS MonthNum
     FROM stg.Flight f
     LEFT JOIN BestHistoricalGate bhg
-        ON bhg.FlightNumber = f.FlightNumber AND bhg.Direction = f.Direction AND bhg.rn = 1
+        ON bhg.FlightNumber = f.FlightNumber AND bhg.Direction = f.Direction
+        AND bhg.rn = 1 AND bhg.Confidence >= 0.6
 ),
 WithDaypart AS (
     SELECT
@@ -89,6 +105,7 @@ SELECT
     z.FlightId,
     z.Direction,
     z.AirlineName,
+    z.AirlineIataCode,
     z.FlightNumber,
     z.AircraftModelCode,
     COALESCE(seats.AircraftModelText, fallbackSeats.AircraftModelText) AS AircraftModelText,
@@ -100,16 +117,18 @@ SELECT
     z.DurationMinutes,
     z.Daypart,
     COALESCE(seats.Seats, fallbackSeats.Seats) AS Seats,
-    -- LoadFactor = default * seasonal(month) * daypart(hour). The one
-    -- honest assumption in the whole model; everything upstream is a
-    -- real scheduled flight, everything downstream is arithmetic on it.
-    CAST(dflt.DefaultLoadFactor * COALESCE(seas.Multiplier, 1)
-         * COALESCE(dp.Multiplier, 1) AS DECIMAL(5,4)) AS LoadFactor,
-    CAST(COALESCE(seats.Seats, fallbackSeats.Seats) * dflt.DefaultLoadFactor * COALESCE(seas.Multiplier, 1)
-         * COALESCE(dp.Multiplier, 1) AS DECIMAL(10,4)) AS Passengers,
+    -- LoadFactor = default * seasonal(month) * daypart(hour), clamped to
+    -- 1.0 — a load factor above 100% isn't a real value no matter what the
+    -- multipliers say, and nothing upstream guarantees they stay small
+    -- enough to avoid it (today's config tops out around 0.90, but that's
+    -- a fact about today's numbers, not a guarantee the formula holds).
+    -- The one honest assumption in the whole model; everything upstream is
+    -- a real scheduled flight, everything downstream is arithmetic on it.
+    CAST(lf.EffectiveLoadFactor AS DECIMAL(5,4)) AS LoadFactor,
+    CAST(COALESCE(seats.Seats, fallbackSeats.Seats) * lf.EffectiveLoadFactor AS DECIMAL(10,4)) AS Passengers,
     COALESCE(gzw.Weight, 0) AS GeometryWeight,
-    CAST(COALESCE(seats.Seats, fallbackSeats.Seats) * dflt.DefaultLoadFactor * COALESCE(seas.Multiplier, 1)
-         * COALESCE(dp.Multiplier, 1) * COALESCE(gzw.Weight, 0) AS DECIMAL(10,4)) AS Exposure,
+    CAST(COALESCE(seats.Seats, fallbackSeats.Seats) * lf.EffectiveLoadFactor
+         * COALESCE(gzw.Weight, 0) AS DECIMAL(10,4)) AS Exposure,
     -- The dwell window as real timestamps, not just offsets — surfaced so
     -- the drill-down can show "when this flight's passengers are actually
     -- moving through the concourse" (the "impact window"), the same
@@ -127,7 +146,10 @@ JOIN cfg.DwellCurve dc ON dc.Direction = z.Direction
 CROSS JOIN cfg.LoadFactorDefault dflt
 LEFT JOIN cfg.LoadFactorSeasonalAdj seas ON seas.MonthNum = z.MonthNum
 LEFT JOIN cfg.LoadFactorDaypartAdj dp ON dp.Daypart = z.Daypart
-LEFT JOIN cfg.GateZoneWeight gzw ON gzw.ZoneName = z.ZoneName AND gzw.Direction = z.Direction;
+LEFT JOIN cfg.GateZoneWeight gzw ON gzw.ZoneName = z.ZoneName AND gzw.Direction = z.Direction
+CROSS APPLY (
+    SELECT LEAST(1.0, dflt.DefaultLoadFactor * COALESCE(seas.Multiplier, 1) * COALESCE(dp.Multiplier, 1)) AS EffectiveLoadFactor
+) lf;
 GO
 
 -- ============================================================
@@ -157,10 +179,18 @@ RawWeight AS (
         t.n AS MinuteOffset,
         DATEADD(MINUTE, t.n, w.WindowStart) AS MinuteTimestamp,
         -- Triangular: rises linearly to the peak, falls linearly after.
+        -- The peak minute itself is always weight 1 by definition, handled
+        -- as its own case so neither leg has to divide by a PeakFromStart
+        -- of exactly 0 (peak at the window's first minute). Whichever side
+        -- of the peak a minute falls on is what picks rising vs. falling —
+        -- a peak at or before the window start (PeakFromStart <= 0) has no
+        -- rising leg at all, so every minute correctly lands in the
+        -- falling branch instead of being flattened to a uniform 1.0
+        -- across the whole window, which is what an earlier version of
+        -- this did.
         CASE
-            WHEN w.PeakFromStart <= 0 THEN 1.0
-            WHEN t.n <= w.PeakFromStart THEN CAST(t.n AS DECIMAL(9,4)) / w.PeakFromStart
-            WHEN w.WindowLengthMin = w.PeakFromStart THEN 1.0
+            WHEN t.n = w.PeakFromStart THEN 1.0
+            WHEN t.n < w.PeakFromStart THEN CAST(t.n AS DECIMAL(9,4)) / w.PeakFromStart
             ELSE CAST(w.WindowLengthMin - t.n AS DECIMAL(9,4)) / (w.WindowLengthMin - w.PeakFromStart)
         END AS RawWeight
     FROM Window w
@@ -213,6 +243,7 @@ SELECT
     fe.FlightId,
     fe.Direction,
     fe.AirlineName,
+    fe.AirlineIataCode,
     fe.FlightNumber,
     fe.AircraftModelCode,
     fe.AircraftModelText,
