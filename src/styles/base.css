@@ -1,0 +1,1348 @@
+/* Self-hosted, per docs/BRIEF.md — never hotlink Google Fonts. */
+@font-face {
+  font-family: "Barlow Condensed";
+  src: url("/fonts/barlow-condensed-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  src: url("/fonts/barlow-condensed-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Dark navy + single blue accent, per the reference mockup approved
+   2026-07-18 — this replaces the original light-wayfinding palette.
+   docs/BRIEF.md and .claude/rules/design.md are updated to match; treat
+   this file's tokens as the source of truth for color going forward. */
+:root {
+  --field: #0a1424;
+  --field-deep: #060d1a;
+  --surface: #101f36;
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --ink: #f4f7fb;
+  --ink-secondary: #8a9bb8;
+  --hairline: rgba(255, 255, 255, 0.1);
+
+  --accent: #3b82f6;
+  --accent-bright: #5b9cff;
+  --accent-dim: rgba(59, 130, 246, 0.18);
+
+  --tier-peak: #5b9cff;
+  --tier-very-high: #5b9cff;
+  --tier-high: #7fb2ff;
+  --tier-moderate: #8a9bb8;
+  --tier-low: #6b7c99;
+  --tier-very-low: #5a6a85;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--field);
+  background-image: radial-gradient(ellipse 1200px 600px at 50% -10%, rgba(59, 130, 246, 0.08), transparent);
+  color: var(--ink);
+  font-family: "Barlow Condensed", "Avenir Next Condensed", "Roboto Condensed",
+    "Arial Narrow", sans-serif;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+/* ---------- page header: wordmark, hero title, peak-time stat ---------- */
+
+.page-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6) var(--space-3);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.brand {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.brand__eyebrow,
+.brand__subtitle {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+}
+
+.brand__mark {
+  flex: 0 0 auto;
+  height: 14px;
+  width: auto;
+}
+
+.brand__hero {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin-top: var(--space-1);
+}
+
+@media (min-width: 640px) {
+  .brand__hero {
+    font-size: 56px;
+  }
+}
+
+.brand__subtitle {
+  font-size: 15px;
+  color: var(--ink-secondary);
+  margin-top: 2px;
+}
+
+.stat-card {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  padding: var(--space-2) var(--space-3);
+  white-space: nowrap;
+}
+
+.stat-card__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.stat-card__value {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: 2px;
+}
+
+.stat-card__tier {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-bright);
+  margin-top: 2px;
+}
+
+.stat-card__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 24px;
+}
+
+.stat-card__bars span {
+  width: 4px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+/* ---------- breadcrumb ---------- */
+
+.breadcrumb {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.breadcrumb__range {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.breadcrumb__seg {
+  border: none;
+  background: none;
+  padding: var(--space-2) 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  cursor: default;
+}
+
+.breadcrumb__seg.is-link {
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.breadcrumb__seg.is-link:hover {
+  color: var(--accent-bright);
+  text-decoration: underline;
+}
+
+.breadcrumb__seg--stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.breadcrumb__seg-secondary {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.breadcrumb__seg-primary {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.breadcrumb__sep {
+  font-size: 16px;
+  color: var(--ink-secondary);
+}
+
+/* Range navigation (jump the whole 14-day window) — visually distinct from
+   the selection nudge that lives with the detail panel, per the brief's
+   rule that the two motions must never look alike or share placement.
+   Both arrows stay disabled: this export covers exactly one window. */
+.range-nav-btn {
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 15px;
+  cursor: default;
+  padding: var(--space-2);
+}
+
+/* The day segment becomes a native <select> in day view, so it doubles as
+   a jump-to-any-day picker without a custom calendar widget. Styled to
+   read like the breadcrumb text it replaces. */
+.breadcrumb__picker {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  padding: var(--space-2) var(--space-5) var(--space-2) 0;
+  cursor: pointer;
+}
+
+.breadcrumb__picker:hover {
+  color: var(--accent-bright);
+}
+
+.breadcrumb__picker-wrap {
+  position: relative;
+}
+
+.breadcrumb__picker-wrap::after {
+  content: "▾";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--ink-secondary);
+  pointer-events: none;
+}
+
+.breadcrumb__picker option {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.breadcrumb__title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+@media (min-width: 640px) {
+  .breadcrumb__title {
+    font-size: 24px;
+  }
+}
+
+/* ---------- main layout: chart + detail panel ---------- */
+
+.main {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Range view navigates straight into the day view on tap now (no preview
+   panel), so there is nothing for the rail to show — collapse it rather
+   than reserve space for a permanently-empty hint. */
+.main--full .detail {
+  display: none;
+}
+
+.chart-col {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.chart-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6) 0;
+}
+
+.chart-header__label,
+.chart-header__mid,
+.chart-header__tier {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.chart-header__label {
+  flex: 0 0 auto;
+  width: 5.5em;
+}
+
+.chart-header__mid {
+  flex: 1 1 auto;
+}
+
+.chart-header__tier {
+  flex: 0 0 auto;
+  width: 6em;
+  text-align: right;
+}
+
+.chart {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-6) var(--space-6);
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Row layout throughout — label left, bar middle, demand tier right —
+   applied at every breakpoint per the reference mockup, replacing the
+   original desktop-vertical / mobile-horizontal axis flip. Each row is an
+   equal flex share of the chart's height, so N rows always fit the
+   viewport with no scroll regardless of N. */
+.row {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: var(--space-1) 0;
+  width: 100%;
+  text-align: left;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.row__label {
+  flex: 0 0 auto;
+  width: 5.5em;
+  font-size: 13px;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.row__track {
+  flex: 1 1 auto;
+  height: 60%;
+  min-height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.row__fill {
+  display: block;
+  height: 100%;
+  /* Every bar is the same hue regardless of daypart — see .row-section
+     for how daypart is actually communicated (dividers + labels, not color). */
+  background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+  border-radius: 4px;
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+
+.row:hover .row__fill,
+.row.is-selected .row__fill,
+.row.is-dragging .row__fill {
+  opacity: 1;
+}
+
+.row.is-selected .row__track,
+.row.is-dragging .row__track {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 1px;
+}
+
+/* Drag-in-progress gets a filled background too, on top of the outline
+   already shared with is-selected, so it reads as "about to select" even
+   before the pointer releases. */
+.row.is-dragging {
+  background: rgba(91, 156, 255, 0.08);
+}
+
+.row__tier {
+  flex: 0 0 auto;
+  width: 6em;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Second order cycle (days 8-14): preview/context, not the order being
+   placed now. Dimming it read as "disabled" rather than "coming up" — the
+   divider line alone is enough to mark the boundary, so both cycles now
+   render at full strength. */
+
+.cycle-divider {
+  flex: 0 0 auto;
+  height: 1px;
+  margin: var(--space-1) 0;
+  background: var(--hairline);
+}
+
+/* Daypart section header (day view only) — a hairline and an eyebrow
+   label mark where one daypart ends and the next begins. This, not a
+   fourth-and-fifth bar color, is how daypart is communicated. */
+.row-section {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+}
+
+.row-section__line {
+  align-self: stretch;
+  height: 1px;
+  background: var(--hairline);
+}
+
+.row-section__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+/* ---------- detail panel: desktop side rail / mobile bottom sheet ---------- */
+
+.detail {
+  flex: 0 0 360px;
+  background: var(--surface);
+  border-left: 1px solid var(--surface-border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sticky within .detail's own scroll, so the arrows/date/close row stays
+   put while flight lists and long content scroll underneath it. */
+.detail__nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--surface);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.detail__body {
+  padding: var(--space-4) var(--space-6) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.detail__close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  background: var(--field);
+  color: var(--ink-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.detail__close:hover {
+  border-color: var(--ink-secondary);
+  color: var(--ink);
+}
+
+.detail__nav-group {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.detail__nav-group--flight {
+  justify-content: space-between;
+}
+
+.flight-nav-id {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.flight-nav-id .flight-row__badge {
+  width: 28px;
+  height: 28px;
+}
+
+.flight-nav-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.flight-nav-time__value {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.detail__nav-labels {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 8em;
+}
+
+.detail__nav-labels--flight {
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.detail__nav-secondary {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.detail__nav-primary {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+@media (min-width: 640px) {
+  .detail__nav-primary {
+    font-size: 26px;
+  }
+}
+
+.detail__nav-btn {
+  border: 1px solid var(--hairline);
+  background: var(--field);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.detail__nav-btn:hover:not(:disabled) {
+  border-color: var(--accent-bright);
+  color: var(--accent-bright);
+}
+
+.detail__nav-btn:disabled {
+  color: rgba(255, 255, 255, 0.15);
+  cursor: default;
+}
+
+.detail__eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.detail__eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+/* Daypart tag on the hour panel — an eyebrow label, not a colored chip;
+   daypart is never communicated by color anywhere in the app. */
+.daypart-chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.daypart-chip:has(+ *) {
+  margin-bottom: var(--space-1);
+}
+
+/* ---------- hero block: number + tier + gauge ---------- */
+
+.detail__hero-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.detail__hero-text {
+  min-width: 0;
+}
+
+.detail__hero {
+  font-size: 56px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--ink);
+}
+
+@media (min-width: 640px) {
+  .detail__hero {
+    font-size: 72px;
+  }
+}
+
+.detail__tier {
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: var(--space-1);
+}
+
+.detail__caption {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  margin-top: 2px;
+  max-width: 20em;
+}
+
+/* Gauge sits in the hero row's right half, next to the index number, at
+   every breakpoint — it's a second reading of the same value, not a
+   decoration, so it stays paired with the number instead of stacking
+   below it on narrow screens. */
+.gauge-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  width: 130px;
+}
+
+.gauge {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.gauge__track {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+.gauge__fill {
+  stroke: var(--accent-bright);
+}
+
+.gauge__tick {
+  font-size: 9px;
+  fill: var(--ink-secondary);
+  font-family: "Barlow Condensed", sans-serif;
+}
+
+.gauge__readout {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.gauge__readout-value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.gauge__readout-caption {
+  font-size: 10px;
+  color: var(--ink-secondary);
+  margin-top: 2px;
+}
+
+.detail__stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.detail__stat-value {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.detail__cta {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  padding: var(--space-3);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.detail__cta:hover {
+  background: var(--accent-bright);
+  border-color: var(--accent-bright);
+}
+
+/* ---------- info tooltip: click-to-open, works without hover on mobile ---------- */
+
+.info-tip {
+  display: inline-block;
+  position: relative;
+  vertical-align: middle;
+}
+
+.info-tip summary {
+  list-style: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid var(--ink-secondary);
+  color: var(--ink-secondary);
+  font-size: 10px;
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 13px;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.info-tip summary::-webkit-details-marker,
+.info-tip summary::marker {
+  display: none;
+  content: "";
+}
+
+.info-tip[open] summary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.info-tip p {
+  position: absolute;
+  z-index: 5;
+  top: 20px;
+  left: 0;
+  width: max-content;
+  max-width: min(220px, calc(100vw - 64px));
+  margin: 0;
+  background: #050b18;
+  border: 1px solid var(--surface-border);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1.4;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Icons that sit near the right edge (e.g. a right-aligned table header)
+   grow the popover leftward instead, so it never runs past the viewport. */
+.info-tip--right p {
+  left: auto;
+  right: 0;
+}
+
+/* ---------- driving-this-hour section + flight table ---------- */
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.section-heading__count {
+  color: var(--accent-bright);
+}
+
+.flight-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.flight-table thead th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.flight-table thead th:last-child,
+.flight-table tbody td:last-child {
+  text-align: right;
+}
+
+.flight-table__th-label {
+  margin-right: 2px;
+}
+
+.flight-table tbody tr {
+  cursor: pointer;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.flight-table tbody tr:hover,
+.flight-table tbody tr:focus-visible {
+  background: rgba(255, 255, 255, 0.03);
+  outline: none;
+}
+
+.flight-table tbody td {
+  padding: var(--space-2) 0;
+  vertical-align: middle;
+}
+
+.flight-row__id {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.flight-row__badge {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  color: var(--accent-bright);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.flight-row__badge--logo {
+  background: none;
+  padding: 2px;
+}
+
+.flight-row__badge--logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.flight-row__meta {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.flight-row__tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+  margin-top: 2px;
+}
+
+/* ---------- flight card (depth 3) ---------- */
+
+/* Lighter than the panel's own background, not darker — these two read as
+   raised surfaces sitting on top of the panel. The about-card below stays
+   on the darker --field tone deliberately, so it recedes as "footnote"
+   rather than competing with the two content cards above it. */
+.route-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  padding: var(--space-4);
+}
+
+.route-card__endpoints {
+  display: flex;
+  align-items: center;
+}
+
+.route-card__endpoint {
+  flex: 0 0 auto;
+}
+
+.route-card__endpoint--right {
+  text-align: right;
+}
+
+.route-card__code {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.route-card__city {
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.route-card__path {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+}
+
+.route-card__line {
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--accent-bright);
+  opacity: 0.4;
+}
+
+.route-card__plane {
+  flex: 0 0 auto;
+  display: flex;
+  color: var(--accent-bright);
+}
+
+.route-card__plane svg {
+  width: 16px;
+  height: 16px;
+  transform: rotate(90deg);
+}
+
+.route-card__duration {
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-secondary);
+  margin-top: var(--space-1);
+}
+
+.stat-mini-row {
+  display: flex;
+  gap: var(--space-4);
+  /* Matches route-card/passenger-card's own padding so the "Aircraft"
+     column lines up with "JFK"/"141" above and below it, instead of
+     sitting flush against .detail__body's edge while the cards around it
+     are inset by their own padding. */
+  padding: 0 var(--space-4);
+}
+
+.stat-mini {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-mini__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-mini__icon {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  color: var(--accent-bright);
+}
+
+.stat-mini__value {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.stat-mini__sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  text-transform: capitalize;
+}
+
+.passenger-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.passenger-card__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.passenger-card__value {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.passenger-card__avg {
+  text-align: right;
+}
+
+.passenger-card__avg-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent-bright);
+}
+
+.passenger-card__track {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.passenger-card__fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+}
+
+.passenger-card__avg-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  background: var(--ink);
+}
+
+.passenger-card__chip {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.passenger-card__chip.is-below {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink-secondary);
+}
+
+.empty-hint {
+  color: var(--ink-secondary);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* ---------- persistent "about this metric" card ---------- */
+
+.about-card {
+  display: flex;
+  gap: var(--space-3);
+  background: var(--field);
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  padding: var(--space-4);
+}
+
+.about-card__icon {
+  flex: 0 0 auto;
+  color: var(--accent-bright);
+}
+
+.about-card__title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+  margin-bottom: var(--space-1);
+}
+
+.about-card__body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-secondary);
+}
+
+/* ---------- loading screen ---------- */
+
+.loading-screen {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.loading-screen__mark {
+  width: 56px;
+  height: auto;
+  margin-bottom: var(--space-3);
+}
+
+.loading-screen__track {
+  width: min(280px, 70vw);
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+/* Same track/fill language as the day/range bars — this is a bar chart
+   with one bar, not a different component. */
+.loading-screen__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+  border-radius: 4px;
+  transition: width 0.2s ease;
+}
+
+.loading-screen__pct {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.loading-screen__message {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  min-height: 1.2em;
+}
+
+/* ---------- footer ---------- */
+
+.footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-6);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+
+.footer.is-stale {
+  color: var(--tier-low);
+}
+
+/* ---------- mobile: axis flip + bottom sheet ---------- */
+
+@media (max-width: 720px) {
+  .page-header {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .brand__hero {
+    font-size: 26px;
+  }
+
+  .brand__eyebrow {
+    font-size: 10px;
+  }
+
+  .stat-card {
+    padding: var(--space-1) var(--space-2);
+    gap: var(--space-2);
+  }
+
+  .stat-card__label {
+    font-size: 9px;
+  }
+
+  .stat-card__value {
+    font-size: 15px;
+  }
+
+  .stat-card__tier {
+    font-size: 10px;
+  }
+
+  .stat-card__bars {
+    height: 18px;
+  }
+
+  .main {
+    position: relative;
+  }
+
+  .row__label {
+    width: 4.2em;
+    font-size: 12px;
+  }
+
+  .row__tier {
+    width: 4.6em;
+    font-size: 11px;
+  }
+
+  .chart-header__label {
+    width: 4.2em;
+  }
+
+  .chart-header__tier {
+    width: 4.6em;
+  }
+
+  .detail {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 72dvh;
+    border-left: none;
+    border-top: 1px solid var(--surface-border);
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+  }
+
+  .detail.is-open {
+    transform: translateY(0);
+  }
+
+  .gauge-wrap {
+    width: 110px;
+  }
+
+  .gauge__readout-value {
+    font-size: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
