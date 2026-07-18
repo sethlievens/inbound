@@ -732,8 +732,15 @@ button {
   stroke: var(--accent-bright);
 }
 
+/* Font-size here is in the SVG's own 200x134 viewBox units, not screen
+   pixels — the gauge renders at 130px wide (110px on mobile), so it scales
+   down by ~0.65x/0.55x. 15px of viewBox-space text is what actually reads
+   as ~10px on screen, matching the type scale's "micro" role; the mobile
+   override compensates for the narrower gauge shrinking it further. See
+   gauge.ts for why cy/tickR/viewBox height moved together to give this
+   size room to clear both the arc and the viewBox edge. */
 .gauge__tick {
-  font-size: 9px;
+  font-size: 15px;
   fill: var(--ink-secondary);
   font-family: "Barlow Condensed", sans-serif;
 }
@@ -1337,6 +1344,10 @@ button {
   }
 
   .gauge__readout-value {
+    font-size: 18px;
+  }
+
+  .gauge__tick {
     font-size: 18px;
   }
 }

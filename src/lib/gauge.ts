@@ -23,12 +23,24 @@ function arcPath(cx: number, cy: number, r: number, fromDeg: number, toDeg: numb
 export function renderGauge(value: number, max: number): string {
   const ratio = max > 0 ? Math.min(1, value / max) : 0;
   const cx = 100;
-  const cy = 108;
+  const cy = 120;
   const r = 74;
-  // Ticks sit outside the arc; leaving 24px of headroom above the arc's
-  // topmost point keeps the midpoint tick's text from clipping the top
-  // edge of the viewBox — the bug in the previous version.
-  const tickR = r + 16;
+  // Ticks need clearance from the arc's own stroke (outer edge at r + half
+  // the 14px stroke width, so r + 7 = 81) and from the viewBox's top edge
+  // at the midpoint tick, where legible text (see .gauge__tick) is tall
+  // enough that both matter. cy moved down and the viewBox grew taller
+  // (below) to open up real headroom above the arc for that.
+  //
+  // The bigger source of overlap turned out not to be radius at all,
+  // though: the side ticks' text-anchor used to point the wrong way, so
+  // "0" and the max label grew back in *toward* the arc from their anchor
+  // point instead of away from it — no radial offset fixes that, since a
+  // long enough label (e.g. "155+") would eventually reach the line
+  // regardless of how far out its anchor point sits. Anchoring "0" at its
+  // end and the max label at its start (below) means both grow away from
+  // the arc, so their distance from it is always exactly tickR, however
+  // many digits they are.
+  const tickR = r + 21;
   const trackPath = arcPath(cx, cy, r, 180, 0);
   const fillPath = arcPath(cx, cy, r, 180, 180 - 180 * ratio);
   const startTick = polar(cx, cy, tickR, 178);
@@ -37,12 +49,12 @@ export function renderGauge(value: number, max: number): string {
 
   return `
     <div class="gauge-wrap">
-      <svg class="gauge" viewBox="0 0 200 122" role="img" aria-label="Gauge: ${Math.round(value)} of ${Math.round(max)}">
+      <svg class="gauge" viewBox="0 0 200 134" role="img" aria-label="Gauge: ${Math.round(value)} of ${Math.round(max)}">
         <path class="gauge__track" d="${trackPath}" fill="none" stroke-width="14" stroke-linecap="round" />
         <path class="gauge__fill" d="${fillPath}" fill="none" stroke-width="14" stroke-linecap="round" />
-        <text class="gauge__tick" x="${startTick.x.toFixed(1)}" y="${startTick.y.toFixed(1)}" text-anchor="start">0</text>
+        <text class="gauge__tick" x="${startTick.x.toFixed(1)}" y="${startTick.y.toFixed(1)}" text-anchor="end">0</text>
         <text class="gauge__tick" x="${midTick.x.toFixed(1)}" y="${midTick.y.toFixed(1)}" text-anchor="middle">${Math.round(max / 2)}</text>
-        <text class="gauge__tick" x="${endTick.x.toFixed(1)}" y="${endTick.y.toFixed(1)}" text-anchor="end">${Math.round(max)}+</text>
+        <text class="gauge__tick" x="${endTick.x.toFixed(1)}" y="${endTick.y.toFixed(1)}" text-anchor="start">${Math.round(max)}+</text>
       </svg>
       <div class="gauge__readout">
         <div class="gauge__readout-value">${Math.round(value)}</div>
