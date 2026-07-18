@@ -11,3 +11,6 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .DS_Store
+
+# Local Netlify folder
+.netlify
