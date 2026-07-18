@@ -675,11 +675,15 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
           <span class="stat-mini__label">${statIcon("aircraft")}Aircraft</span>
           <span class="stat-mini__value">${f.aircraftType}</span>
         </div>
-        <div class="stat-mini">
-          <span class="stat-mini__label">${statIcon("gate")}Gate</span>
-          <span class="stat-mini__value">${f.gate}</span>
-          <span class="stat-mini__sub">${f.gateZone}</span>
-        </div>
+        ${
+          f.gate !== ""
+            ? `<div class="stat-mini">
+                <span class="stat-mini__label">${statIcon("gate")}Gate</span>
+                <span class="stat-mini__value">${f.gate}</span>
+                <span class="stat-mini__sub">${f.gateZone}</span>
+              </div>`
+            : ""
+        }
         <div class="stat-mini">
           <span class="stat-mini__label">${statIcon("seats")}Seats</span>
           <span class="stat-mini__value">${f.seats}</span>
