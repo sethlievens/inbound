@@ -183,7 +183,7 @@ export function mount(
         </span>
         <div class="brand__subtitle">Expected foot traffic in front of this location</div>
       </div>
-      <div class="stat-card">
+      <button class="stat-card" id="stat-card" aria-label="Jump to the peak">
         <div>
           <div class="stat-card__label" id="stat-label"></div>
           <div class="stat-card__value" id="stat-value"></div>
@@ -192,7 +192,7 @@ export function mount(
         <div class="stat-card__bars" aria-hidden="true">
           <span style="height:35%"></span><span style="height:55%"></span><span style="height:75%"></span><span style="height:100%"></span>
         </div>
-      </div>
+      </button>
     </header>
     <div class="breadcrumb" id="breadcrumb"></div>
     <div class="main" id="main">
@@ -222,6 +222,8 @@ export function mount(
   root.querySelector<HTMLSelectElement>("#location-picker")!.addEventListener("change", (e) => {
     onSwitchLocation((e.target as HTMLSelectElement).value);
   });
+
+  root.querySelector<HTMLButtonElement>("#stat-card")!.addEventListener("click", handleStatCardClick);
 
   // Updated by renderRows on every render so setupDragSelect always commits
   // through whichever handler (range vs. day view) is currently active.
@@ -317,11 +319,18 @@ export function mount(
 
   // ---------- header stat card: peak day (range view) / peak hour (day view) ----------
 
+  /** Shared with renderRangeChart, which needs the same "which row in this
+   * window is the peak" answer for its own marker — kept in one place so
+   * the stat card and the chart can never disagree about which day it is. */
+  function peakDayIdxInWindow(days: Day[]): number {
+    return days.reduce((best, d, i) => (d.dayIndex > days[best].dayIndex ? i : best), 0);
+  }
+
   function renderStatCard(): void {
     let peakIndex: number;
     if (state.view === "range") {
       const days = currentWindowDays();
-      const peakIdx = days.reduce((best, d, i) => (d.dayIndex > days[best].dayIndex ? i : best), 0);
+      const peakIdx = peakDayIdxInWindow(days);
       statLabelEl.textContent = "Peak day";
       statValueEl.textContent = formatDayTitle(days[peakIdx].date);
       peakIndex = days[peakIdx].dayIndex;
@@ -337,6 +346,24 @@ export function mount(
     // make this always read "Very high demand" instead, regardless of
     // what the peak day/hour actually was.
     statTierEl.textContent = `${Math.round(peakIndex)} · ${demandTier(1, true).label}`;
+  }
+
+  /** The stat card doubles as a shortcut to whatever it's showing — tapping
+   * "Peak day" jumps straight into that day, tapping "Peak time" (already
+   * inside a day) selects that hour, the same destination a tap on the
+   * peak bar itself would reach. Reads state fresh rather than closing
+   * over anything captured at the last render, since this listener is
+   * attached once at mount, not re-attached on every render. */
+  function handleStatCardClick(): void {
+    if (state.view === "range") {
+      const days = currentWindowDays();
+      const idx = peakDayIdxInWindow(days);
+      const windowOffset = state.windowIdx * state.forecast.windowDays;
+      jumpToDay(windowOffset + idx);
+    } else {
+      const day = currentDay();
+      if (day) selectHour(day.peakHour);
+    }
   }
 
   // ---------- breadcrumb: hierarchy with a way back out at every level ----------
@@ -355,7 +382,7 @@ export function mount(
       // (same idiom as the day picker below) scales to however many
       // windows the export actually has, no separate widget needed.
       segments.push(`
-        <span class="breadcrumb__range">
+        <span class="breadcrumb__range breadcrumb__seg--stacked">
           <span class="breadcrumb__seg-secondary">${windowDays}-day forecast</span>
           <span class="breadcrumb__picker-wrap">
             <select class="breadcrumb__picker" id="crumb-window-picker" aria-label="Jump to a different ${windowDays}-day window">
@@ -550,7 +577,7 @@ export function mount(
     const days = currentWindowDays();
     const windowOffset = state.windowIdx * state.forecast.windowDays;
     const maxIndex = Math.max(...days.map((d) => d.dayIndex), 1);
-    const peakIdx = days.reduce((best, d, i) => (d.dayIndex > days[best].dayIndex ? i : best), 0);
+    const peakIdx = peakDayIdxInWindow(days);
     const cycleLen = state.forecast.orderCycleDays;
 
     renderRows(

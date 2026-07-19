@@ -42,6 +42,7 @@
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
 }
@@ -102,7 +103,7 @@ button {
 .brand__eyebrow {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: var(--space-1);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -146,7 +147,9 @@ select.brand__hero {
   background: none;
   color: var(--ink);
   font-family: inherit;
+  padding-left: 0;
   padding-right: 0.7em;
+  margin: 0;
   cursor: pointer;
 }
 
@@ -163,9 +166,14 @@ select.brand__hero option {
 .brand__hero-wrap::after {
   content: "▾";
   position: absolute;
-  right: 0;
-  top: 0.5em;
-  font-size: 0.35em;
+  right: 2px;
+  top: 50%;
+  /* Centered against the select's own rendered height, not a font-relative
+     offset — this used to be `top: 0.5em; font-size: 0.35em`, both computed
+     from the wrap's inherited (small) font size rather than the hero
+     select's actual 40-56px text, which put the arrow noticeably high. */
+  transform: translateY(-50%);
+  font-size: 20px;
   color: var(--ink-secondary);
   pointer-events: none;
 }
@@ -186,6 +194,19 @@ select.brand__hero option {
   border-radius: 10px;
   padding: var(--space-2) var(--space-3);
   white-space: nowrap;
+  /* A <button> now, so it's a real jump-to-peak shortcut, not just a
+     readout — reset the UA button chrome back to how this looked as a
+     plain div. */
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.stat-card:hover,
+.stat-card:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
 
 .stat-card__label {
@@ -319,7 +340,7 @@ select.brand__hero option {
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 11px;
+  font-size: 15px;
   color: var(--ink-secondary);
   pointer-events: none;
 }
@@ -1316,6 +1337,10 @@ select.brand__hero option {
 
   .brand__hero {
     font-size: 26px;
+  }
+
+  .brand__hero-wrap::after {
+    font-size: 14px;
   }
 
   .brand__eyebrow {
