@@ -63,36 +63,46 @@ RANGE_END="$(date_offset $((MIN_LOOKAHEAD_DAYS + WINDOW_DAYS - 1)))"
 echo "Ingesting $WINDOW_DAYS days starting $RANGE_START (today+$MIN_LOOKAHEAD_DAYS) for: $AIRPORT_CODES" >&2
 
 for AIRPORT in $AIRPORT_CODES; do
-  # Re-running this script for a date already ingested (which every night
-  # does, since the window slides forward by one day but mostly overlaps
-  # yesterday's) must REPLACE that date's flights, not add to them — without
-  # this, a date queried on two different nights would double-count its
-  # exposure once both ingests' rows land in stg.Flight. Scoped by
-  # AirportCode too, so re-ingesting DFW never touches DTW's rows.
-  "$SQLCMD" -S "$SQLCMDSERVER" -C -U "$SQLCMDUSER" -d Inbound -Q "
-  DELETE FROM stg.Flight WHERE AirportCode = '$AIRPORT' AND CAST(ScheduledTime AS DATE) BETWEEN '$RANGE_START' AND '$RANGE_END';
-  DELETE FROM stg.ApiIngestBatch WHERE AirportCode = '$AIRPORT' AND RequestedDate BETWEEN '$RANGE_START' AND '$RANGE_END';
-  " -b
-
   for i in $(seq 0 $((WINDOW_DAYS - 1))); do
     QUERY_DATE="$(date_offset $((MIN_LOOKAHEAD_DAYS + i)))"
     for DIRECTION in departure arrival; do
       RESPONSE_FILE="$SCRATCH_DIR/${AIRPORT}_${DIRECTION}_${QUERY_DATE}.json"
-      # A brief pause between calls — a full run now covers multiple
-      # airports (more calls per run than when this was DTW-only), and a
-      # burst of requests with no spacing tripped Aviation Edge's
-      # per-minute rate limit partway through a run once already.
-      sleep "${REQUEST_DELAY_SECONDS:-1}"
-      curl -s "https://aviation-edge.com/v2/public/flightsFuture?key=${AVIATION_EDGE_KEY}&type=${DIRECTION}&iataCode=${AIRPORT}&date=${QUERY_DATE}" \
-        -o "$RESPONSE_FILE"
 
-      if ! python3 -c "
+      # Aviation Edge's per-minute rate limit can trip partway through a
+      # multi-airport run. A rate-limit response is transient, not a real
+      # "this date has no data" answer, so it gets retried with backoff
+      # before this date is given up on — giving up too early is what
+      # previously caused good data to be replaced with nothing (see the
+      # REPLACE comment below: the delete only runs after a fetch actually
+      # succeeds, specifically so a failed retry loop leaves that date's
+      # existing rows alone instead of blanking them).
+      ATTEMPT=1
+      MAX_ATTEMPTS=5
+      while :; do
+        sleep "${REQUEST_DELAY_SECONDS:-1}"
+        curl -s "https://aviation-edge.com/v2/public/flightsFuture?key=${AVIATION_EDGE_KEY}&type=${DIRECTION}&iataCode=${AIRPORT}&date=${QUERY_DATE}" \
+          -o "$RESPONSE_FILE"
+
+        if python3 -c "
 import json, sys
 with open('$RESPONSE_FILE', encoding='utf-8') as f:
     data = json.load(f)
 sys.exit(0 if isinstance(data, list) else 1)
 " 2>/dev/null; then
-        echo "  $AIRPORT $DIRECTION $QUERY_DATE: skipped (not a flight array — $(head -c 120 "$RESPONSE_FILE"))" >&2
+          break
+        fi
+
+        if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
+          echo "  $AIRPORT $DIRECTION $QUERY_DATE: skipped after $ATTEMPT attempts (not a flight array — $(head -c 120 "$RESPONSE_FILE")) — leaving existing rows in place" >&2
+          RESPONSE_FILE=""
+          break
+        fi
+        echo "  $AIRPORT $DIRECTION $QUERY_DATE: attempt $ATTEMPT failed ($(head -c 80 "$RESPONSE_FILE")), retrying..." >&2
+        sleep "$((ATTEMPT * 5))"
+        ATTEMPT=$((ATTEMPT + 1))
+      done
+
+      if [ -z "$RESPONSE_FILE" ]; then
         continue
       fi
 
@@ -105,6 +115,16 @@ with open(raw_path, encoding="utf-8") as f:
 escaped = raw.replace("'", "''")
 print("USE Inbound;")
 print("DECLARE @BatchId INT;")
+# Re-running this script for a date already ingested (which every night does,
+# since the window slides forward by one day but mostly overlaps yesterday's)
+# must REPLACE that date's flights, not add to them — without this, a date
+# queried on two different nights would double-count its exposure once both
+# ingests' rows land in stg.Flight. This delete only runs here, immediately
+# before inserting a response that's already confirmed to be a real flight
+# array, so a date whose fetch fails/retries-out keeps its last-known-good
+# rows (stale) instead of being wiped (blank).
+print(f"DELETE FROM stg.Flight WHERE AirportCode = '{airport}' AND Direction = '{direction}' AND CAST(ScheduledTime AS DATE) = '{query_date}';")
+print(f"DELETE FROM stg.ApiIngestBatch WHERE AirportCode = '{airport}' AND Direction = '{direction}' AND RequestedDate = '{query_date}';")
 print(f"INSERT INTO stg.ApiIngestBatch (RequestedDate, Direction, AirportCode, RawResponseJson) VALUES ('{query_date}', '{direction}', '{airport}', N'{escaped}');")
 print("SET @BatchId = SCOPE_IDENTITY();")
 print("EXEC stg.usp_ParseAviationEdgeBatch @BatchId;")
