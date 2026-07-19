@@ -953,6 +953,18 @@ select.brand__hero option {
   vertical-align: middle;
 }
 
+/* The collapsed "N flights, gate not yet assigned" line — deliberately
+   not a table row: it isn't clickable (there's no single flight's detail
+   to show), and looking visually different from the itemized rows above
+   is the point, not an oversight. Muted and un-bolded so it reads as a
+   footnote to the real list, not one more entry in it. */
+.inferred-flights-note {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--hairline);
+}
+
 .flight-row__id {
   display: flex;
   align-items: center;

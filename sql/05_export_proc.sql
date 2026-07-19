@@ -129,6 +129,18 @@ BEGIN
                         hsh.TrafficHour AS hour,
                         hsh.Daypart AS daypart,
                         hsh.TrafficIndex AS [index],
+                        -- Only flights with a resolved gate (ZoneName =
+                        -- 'home') are itemized — a flight we can't place is
+                        -- weaker evidence than one at a real gate, and
+                        -- mixing them flattens a distinction worth keeping.
+                        -- Unresolved-but-material flights (still >= 0.5
+                        -- exposure, just via an airline's empirical prior
+                        -- rather than a known gate — see
+                        -- mdl.FlightExposure's AirlineGeometryPrior)
+                        -- collapse into inferredFlightCount/inferredExposure
+                        -- below instead of a long, low-confidence tail of
+                        -- individually-listed guesses.
+                        --
                         -- COALESCE to '[]' because FOR JSON PATH omits the key entirely
                         -- (not even a JSON null) when the subquery returns no rows, and
                         -- the front end should never have to branch on a missing key.
@@ -156,6 +168,15 @@ BEGIN
                                 fhd.WindowEndTime AS impactWindowEnd
                             FROM #FlightHours fhd
                             WHERE fhd.TrafficDate = hsh.TrafficDate AND fhd.TrafficHour = hsh.TrafficHour
+                              -- Itemized = a resolved, non-'unknown' zone.
+                              -- Not literally "= 'home'": DTW's zone names
+                              -- are 'south'/'center'/'terminal-tram'/
+                              -- 'far-north', not 'home' — only DFW/IAD use
+                              -- that name. 'unknown' is the one zone name
+                              -- every location shares, so it's what this
+                              -- checks against instead of a location-
+                              -- specific zone name that doesn't generalize.
+                              AND fhd.ZoneName <> 'unknown'
                               -- Excludes flights that would display as "0
                               -- past this location" (other-terminal gates,
                               -- which are correctly zero-weight but aren't
@@ -176,7 +197,13 @@ BEGIN
                             -- `undefined` instead of the `null` its type
                             -- declares — silently wrong rather than absent.
                             FOR JSON PATH, INCLUDE_NULL_VALUES
-                        ), '[]')) AS flights
+                        ), '[]')) AS flights,
+                        (SELECT COUNT(*) FROM #FlightHours fhd
+                         WHERE fhd.TrafficDate = hsh.TrafficDate AND fhd.TrafficHour = hsh.TrafficHour
+                           AND fhd.ZoneName = 'unknown' AND fhd.ExposureAtHour >= 0.5) AS inferredFlightCount,
+                        CAST(COALESCE((SELECT SUM(fhd.ExposureAtHour) FROM #FlightHours fhd
+                         WHERE fhd.TrafficDate = hsh.TrafficDate AND fhd.TrafficHour = hsh.TrafficHour
+                           AND fhd.ZoneName = 'unknown' AND fhd.ExposureAtHour >= 0.5), 0) AS DECIMAL(10,4)) AS inferredExposure
                     FROM HourShape hsh
                     WHERE hsh.TrafficDate = dshp.TrafficDate
                     ORDER BY hsh.TrafficHour

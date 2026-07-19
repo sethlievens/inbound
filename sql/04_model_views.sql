@@ -97,9 +97,22 @@ WithDaypart AS (
         -- read a foreign terminal's gate as if it were this location's own
         -- numbering, which is a real bug this caught at DTW (see
         -- IsOtherTerminal below) — only actually attempt the parse when
-        -- the gate starts with this location's own prefix.
+        -- the gate starts with this location's own prefix. Some real gate
+        -- strings carry a trailing letter after the number too (Dulles's
+        -- lower-level regional gates are "A1A".."A6A"; DFW has "B12a" and
+        -- "B12b" for a split satellite gate) — stripped before casting so
+        -- these still parse as their base gate number instead of failing
+        -- TRY_CAST on "1A" and silently falling through to 'unknown'.
+        -- PATINDEX finds the first non-digit in the substring-plus-sentinel
+        -- ('X' can never itself be a false match, since it isn't a digit);
+        -- LEFT(...) up to just before it keeps only the leading digits.
         CASE WHEN LEFT(p.EffectiveGate, 1) = p.HomeTerminalPrefix
-             THEN TRY_CAST(SUBSTRING(p.EffectiveGate, 2, 10) AS INT)
+             THEN TRY_CAST(
+                 LEFT(
+                     SUBSTRING(p.EffectiveGate, 2, 10),
+                     PATINDEX('%[^0-9]%', SUBSTRING(p.EffectiveGate, 2, 10) + 'X') - 1
+                 ) AS INT
+             )
              ELSE NULL
         END AS GateNum,
         -- Blank ("no gate yet") and "assigned, but to a different
@@ -127,53 +140,109 @@ WithZone AS (
     FROM WithDaypart w
     LEFT JOIN cfg.GateZoneMap gz
         ON gz.LocationId = w.LocationId AND w.GateNum BETWEEN gz.GateNumFrom AND gz.GateNumTo
+),
+-- Passengers doesn't depend on geometry weight (they're independent
+-- factors multiplied together at the end), so it's computed here, one
+-- step before AirlineGeometryPrior needs it as a weighting factor.
+WithPassengers AS (
+    SELECT
+        z.*,
+        COALESCE(seats.Seats, fallbackSeats.Seats) AS Seats,
+        COALESCE(seats.AircraftModelText, fallbackSeats.AircraftModelText) AS AircraftModelText,
+        -- LoadFactor = default * seasonal(month) * daypart(hour), clamped
+        -- to 1.0 — a load factor above 100% isn't a real value no matter
+        -- what the multipliers say, and nothing upstream guarantees they
+        -- stay small enough to avoid it (today's config tops out around
+        -- 0.90, but that's a fact about today's numbers, not a guarantee
+        -- the formula holds). The one honest assumption in the whole
+        -- model; everything upstream is a real scheduled flight,
+        -- everything downstream is arithmetic on it. Shared across all
+        -- locations today — a real per-airport seasonal curve (the same
+        -- BTS approach already used for DTW) is the natural next step for
+        -- DFW/IAD, not yet done.
+        CAST(lf.EffectiveLoadFactor AS DECIMAL(5,4)) AS LoadFactor,
+        CAST(COALESCE(seats.Seats, fallbackSeats.Seats) * lf.EffectiveLoadFactor AS DECIMAL(10,4)) AS Passengers
+    FROM WithZone z
+    -- Live schedules bring in aircraft types no hand-tuned lookup will
+    -- ever fully enumerate; an unrecognized code falls back to cfg's
+    -- 'UNKNOWN' row (a plausible average) rather than an INNER JOIN
+    -- silently dropping the flight from the model entirely.
+    LEFT JOIN cfg.SeatsByAircraftType seats ON seats.AircraftModelCode = z.AircraftModelCode
+    LEFT JOIN cfg.SeatsByAircraftType fallbackSeats ON fallbackSeats.AircraftModelCode = 'UNKNOWN'
+    CROSS JOIN cfg.LoadFactorDefault dflt
+    LEFT JOIN cfg.LoadFactorSeasonalAdj seas ON seas.MonthNum = z.MonthNum
+    LEFT JOIN cfg.LoadFactorDaypartAdj dp ON dp.Daypart = z.Daypart
+    CROSS APPLY (
+        SELECT LEAST(1.0, dflt.DefaultLoadFactor * COALESCE(seas.Multiplier, 1) * COALESCE(dp.Multiplier, 1)) AS EffectiveLoadFactor
+    ) lf
+),
+-- A flat "unknown gate" weight made sense at DTW, where being unassigned
+-- doesn't dilute much (one concourse structure, most competitors are
+-- already a known zero via IsOtherTerminal). It falls apart at a
+-- multi-terminal hub like DFW: an unassigned American Airlines flight is
+-- overwhelmingly likely to be in one of AA's own terminals, but an
+-- unassigned Delta flight there is overwhelmingly likely to be nowhere
+-- near it — a single flat constant can't tell those two apart, and
+-- checking the real numbers showed why that matters: at DFW A8, 92% of
+-- what cleared the display threshold turned out to be flat-weighted
+-- "unknown" guesses, not resolved gates.
+--
+-- The fix: derive the unknown-gate weight from that airline's *own*
+-- already-resolved flights at this location instead of guessing one
+-- number for everyone. An airline that's never observed away from a
+-- location's home terminal gets a prior near that terminal's own weight;
+-- one that's never observed IN it collapses toward zero, because
+-- 'other-terminal' flights correctly contribute a real 0 to this average,
+-- not just get excluded from it. Weighted by Passengers so a widebody's
+-- resolved flight counts for more than a regional jet's.
+AirlineGeometryPrior AS (
+    SELECT
+        w.LocationId,
+        w.AirlineIataCode,
+        SUM(COALESCE(gzw.Weight, 0) * w.Passengers) / NULLIF(SUM(w.Passengers), 0) AS PriorWeight
+    FROM WithPassengers w
+    LEFT JOIN cfg.GateZoneWeight gzw ON gzw.LocationId = w.LocationId AND gzw.ZoneName = w.ZoneName AND gzw.Direction = w.Direction
+    WHERE w.ZoneName <> 'unknown'
+    GROUP BY w.LocationId, w.AirlineIataCode
 )
 SELECT
-    z.FlightId,
-    z.LocationId,
-    z.Direction,
-    z.AirlineName,
-    z.AirlineIataCode,
-    z.FlightNumber,
-    z.AircraftModelCode,
-    COALESCE(seats.AircraftModelText, fallbackSeats.AircraftModelText) AS AircraftModelText,
-    z.Gate,
-    z.ZoneName,
-    z.ScheduledTime,
-    z.OtherAirportCode,
-    z.OtherAirportCity,
-    z.DurationMinutes,
-    z.Daypart,
-    COALESCE(seats.Seats, fallbackSeats.Seats) AS Seats,
-    -- LoadFactor = default * seasonal(month) * daypart(hour), clamped to
-    -- 1.0 — a load factor above 100% isn't a real value no matter what the
-    -- multipliers say, and nothing upstream guarantees they stay small
-    -- enough to avoid it (today's config tops out around 0.90, but that's
-    -- a fact about today's numbers, not a guarantee the formula holds).
-    -- The one honest assumption in the whole model; everything upstream is
-    -- a real scheduled flight, everything downstream is arithmetic on it.
-    -- Shared across all locations today — a real per-airport seasonal
-    -- curve (the same BTS approach already used for DTW) is the natural
-    -- next step for DFW, not yet done.
-    CAST(lf.EffectiveLoadFactor AS DECIMAL(5,4)) AS LoadFactor,
-    CAST(COALESCE(seats.Seats, fallbackSeats.Seats) * lf.EffectiveLoadFactor AS DECIMAL(10,4)) AS Passengers,
-    COALESCE(gzw.Weight, 0) AS GeometryWeight,
-    CAST(COALESCE(seats.Seats, fallbackSeats.Seats) * lf.EffectiveLoadFactor
-         * COALESCE(gzw.Weight, 0) AS DECIMAL(10,4)) AS Exposure
-FROM WithZone z
--- Live schedules bring in aircraft types no hand-tuned lookup will ever
--- fully enumerate; an unrecognized code falls back to cfg's 'UNKNOWN' row
--- (a plausible average) rather than an INNER JOIN silently dropping the
--- flight from the model entirely.
-LEFT JOIN cfg.SeatsByAircraftType seats ON seats.AircraftModelCode = z.AircraftModelCode
-LEFT JOIN cfg.SeatsByAircraftType fallbackSeats ON fallbackSeats.AircraftModelCode = 'UNKNOWN'
-CROSS JOIN cfg.LoadFactorDefault dflt
-LEFT JOIN cfg.LoadFactorSeasonalAdj seas ON seas.MonthNum = z.MonthNum
-LEFT JOIN cfg.LoadFactorDaypartAdj dp ON dp.Daypart = z.Daypart
-LEFT JOIN cfg.GateZoneWeight gzw ON gzw.LocationId = z.LocationId AND gzw.ZoneName = z.ZoneName AND gzw.Direction = z.Direction
-CROSS APPLY (
-    SELECT LEAST(1.0, dflt.DefaultLoadFactor * COALESCE(seas.Multiplier, 1) * COALESCE(dp.Multiplier, 1)) AS EffectiveLoadFactor
-) lf;
+    w.FlightId,
+    w.LocationId,
+    w.Direction,
+    w.AirlineName,
+    w.AirlineIataCode,
+    w.FlightNumber,
+    w.AircraftModelCode,
+    w.AircraftModelText,
+    w.Gate,
+    w.ZoneName,
+    w.ScheduledTime,
+    w.OtherAirportCode,
+    w.OtherAirportCity,
+    w.DurationMinutes,
+    w.Daypart,
+    w.Seats,
+    w.LoadFactor,
+    w.Passengers,
+    -- Resolved zones (home, other-terminal) use the location's own
+    -- configured weight, same as always. Only 'unknown' flights fall
+    -- through to the airline's empirical prior, and only fall through
+    -- further to cfg's flat placeholder if that airline has no resolved
+    -- flights at this location to learn a prior from at all (a brand new
+    -- or extremely rare carrier here).
+    COALESCE(
+        CASE WHEN w.ZoneName = 'unknown' THEN prior.PriorWeight ELSE NULL END,
+        gzw.Weight,
+        0
+    ) AS GeometryWeight,
+    CAST(w.Passengers * COALESCE(
+        CASE WHEN w.ZoneName = 'unknown' THEN prior.PriorWeight ELSE NULL END,
+        gzw.Weight,
+        0
+    ) AS DECIMAL(10,4)) AS Exposure
+FROM WithPassengers w
+LEFT JOIN cfg.GateZoneWeight gzw ON gzw.LocationId = w.LocationId AND gzw.ZoneName = w.ZoneName AND gzw.Direction = w.Direction
+LEFT JOIN AirlineGeometryPrior prior ON prior.LocationId = w.LocationId AND prior.AirlineIataCode = w.AirlineIataCode;
 GO
 
 -- ============================================================

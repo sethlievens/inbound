@@ -694,12 +694,15 @@ export function mount(
       </div>
       <div class="section-heading">
         <span>✈ Flights this hour</span>
-        <span class="section-heading__count">${hour.flights.length} flight${hour.flights.length === 1 ? "" : "s"}</span>
+        <span class="section-heading__count">${hour.flights.length + hour.inferredFlightCount} flight${hour.flights.length + hour.inferredFlightCount === 1 ? "" : "s"}</span>
       </div>
       ${
-        hour.flights.length === 0
+        hour.flights.length === 0 && hour.inferredFlightCount === 0
           ? `<p class="empty-hint">No scheduled flights this hour.</p>`
-          : `<table class="flight-table">
+          : `${
+              hour.flights.length === 0
+                ? ""
+                : `<table class="flight-table">
               <thead>
                 <tr>
                   <th scope="col">Flight</th>
@@ -735,6 +738,12 @@ export function mount(
                   .join("")}
               </tbody>
             </table>`
+            }
+            ${
+              hour.inferredFlightCount === 0
+                ? ""
+                : `<div class="inferred-flights-note">+ ${hour.inferredFlightCount} flight${hour.inferredFlightCount === 1 ? "" : "s"}, gate not yet assigned (inferred) — ${Math.round(hour.inferredExposure)} pax</div>`
+            }`
       }
       <div class="about-card">
         <span class="about-card__icon">ⓘ</span>

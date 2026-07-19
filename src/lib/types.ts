@@ -31,7 +31,15 @@ export interface Hour {
   hour: number;
   daypart: Daypart;
   index: number;
-  flights: Flight[];
+  flights: Flight[]; // only flights with a resolved gate — see inferredFlightCount
+  // Flights this hour with no resolved gate, whose exposure still cleared
+  // the display threshold (via an airline's own empirical geometry-weight
+  // prior, not a known gate — see mdl.FlightExposure). Collapsed into a
+  // count and a total rather than listed individually: an inferred flight
+  // is weaker evidence than a real gate, and itemizing dozens of them
+  // reads as noise, not credibility.
+  inferredFlightCount: number;
+  inferredExposure: number;
 }
 
 export interface Day {

@@ -340,5 +340,22 @@ INSERT INTO cfg.CargoAirline (AirlineName, IataCode) VALUES
     ('baron aviation services',  NULL),
     ('csa air',                  NULL),
     ('wiggins airways',          NULL),
-    ('berry aviation',           NULL);
+    ('berry aviation',           NULL),
+    -- Surfaced by DFW's live data, a much wider international/cargo mix
+    -- than DTW's. dhl/cargolux/aerologic/airzeta are dedicated freight
+    -- operators with their own IATA code, safe to match on code too. The
+    -- rest are cargo divisions of a passenger airline sharing that
+    -- airline's own code (e.g. EVA Air Cargo flies under 'BR', same as
+    -- EVA Air's passenger service) — matched by name only, since matching
+    -- by code would also zero out that airline's real passenger flights.
+    ('dhl',                      'D0'),
+    ('cargolux',                 'CV'),
+    ('aerologic',                '3S'),
+    ('airzeta',                  'KJ'),
+    ('martinaire',               NULL),
+    ('china airlines cargo',     NULL),
+    ('eva air cargo',            NULL),
+    ('emirates skycargo',        NULL),
+    ('air canada cargo',         NULL),
+    ('korean air cargo',         NULL);
 GO
