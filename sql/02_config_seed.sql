@@ -89,6 +89,27 @@ INSERT INTO cfg.SeatsByAircraftType (AircraftModelCode, AircraftModelText, Seats
     ('E75L', 'Embraer E175',            76),
     ('E75S', 'Embraer E175 (short)',    76),
     ('B737', 'Boeing 737 (generic/unspecified variant)', 140),
+    -- Surfaced by IAD/DFW's live data: a much wider mix of regional jets
+    -- and widebodies than DTW's ever needed. Some of these (E45X, CRJ2)
+    -- were quietly inflating small regional jets to the 150-seat UNKNOWN
+    -- fallback at 3x their real size; others (B77W, A388, A346) were
+    -- being *under*-counted the same way, since UNKNOWN's 150 seats also
+    -- reads as tiny next to a real widebody's 300-500+.
+    ('E45X', 'Embraer ERJ-145XR',          50),
+    ('CRJ2', 'Bombardier CRJ-200',         50),
+    ('E135', 'Embraer ERJ-135',            37),
+    ('DH8D', 'De Havilland Dash 8-400',    76),
+    ('C208', 'Cessna 208B Grand Caravan',   9),
+    ('BE36', 'Beechcraft Bonanza G36',      5),
+    ('B77W', 'Boeing 777-300ER',          296),
+    ('B77L', 'Boeing 777-200LR',          301),
+    ('B764', 'Boeing 767-400ER',          261),
+    ('B78X', 'Boeing 787-10',             330),
+    ('B748', 'Boeing 747-8',              410),
+    ('A35K', 'Airbus A350-1000',          366),
+    ('A346', 'Airbus A340-600',           380),
+    ('A388', 'Airbus A380-800',           525),
+    ('BCS1', 'Airbus A220-100',           109),
     ('UNKNOWN', 'Unrecognized aircraft type (fallback)', 150);
 GO
 
