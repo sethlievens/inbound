@@ -134,6 +134,31 @@ PYEOF
       echo "  $AIRPORT $DIRECTION $QUERY_DATE: ingested" >&2
     done
   done
+
+  # Aviation Edge structurally refuses to return a schedule inside
+  # MIN_LOOKAHEAD_DAYS ("date must be above ..."), so today..today+7 can
+  # never be fetched directly — that's not a bug, but it did leave those
+  # days with zero flights (and a dayIndex of 0, "very low") every single
+  # night, forever, for every airport. Since Aviation Edge's own future
+  # schedule is itself a repeating weekly template (confirmed empirically:
+  # identical flight numbers recur exactly 7 and 14 days apart), the real
+  # schedule for one of these blind dates already exists in what was just
+  # ingested above, two weeks out on the same day-of-week. Copying it back
+  # isn't a guess dressed up as fact — it's the same underlying schedule,
+  # fetched from a date Aviation Edge was actually willing to answer for.
+  for i in $(seq 0 $((MIN_LOOKAHEAD_DAYS - 1))); do
+    BLIND_DATE="$(date_offset "$i")"
+    TEMPLATE_DATE="$(date_offset $((i + 14)))"
+    "$SQLCMD" -S "$SQLCMDSERVER" -C -U "$SQLCMDUSER" -d Inbound -Q "
+    DELETE FROM stg.Flight WHERE AirportCode = '$AIRPORT' AND CAST(ScheduledTime AS DATE) = '$BLIND_DATE';
+    INSERT INTO stg.Flight (BatchId, Direction, AirlineName, AirlineIataCode, FlightNumber, AircraftModelCode, Gate, ScheduledTime, OtherAirportCode, OtherAirportCity, DurationMinutes, AirportCode)
+    SELECT BatchId, Direction, AirlineName, AirlineIataCode, FlightNumber, AircraftModelCode, Gate,
+           DATEADD(day, -14, ScheduledTime), OtherAirportCode, OtherAirportCity, DurationMinutes, AirportCode
+    FROM stg.Flight
+    WHERE AirportCode = '$AIRPORT' AND CAST(ScheduledTime AS DATE) = '$TEMPLATE_DATE';
+    " -b
+    echo "  $AIRPORT blind-window backfill $BLIND_DATE (from $TEMPLATE_DATE): done" >&2
+  done
 done
 
 echo "Ingest complete." >&2
