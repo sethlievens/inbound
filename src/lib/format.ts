@@ -73,6 +73,31 @@ export function demandTier(ratio: number, isPeak: boolean): DemandTier {
   return { label: "Very low demand", className: "tier-very-low" };
 }
 
+/** Buckets a day's index against the fixed 100-baseline, not against the
+ * current 14-day window's own peak — this is what the range view needs
+ * and demandTier() deliberately doesn't do. A recurring ordering decision
+ * ("is this coming week busy or quiet") only means something if "High"
+ * reflects a real busy week and "Low" a real quiet one, the same way each
+ * time you look, not just "busier than whatever 13 other days happened to
+ * be in view." cfg.IndexBaseline is calibrated from a real trailing-year
+ * BTS average (see sql/08_bts_recalibration.sql), so 100 here means an
+ * actual average day, not an average of this particular window.
+ *
+ * Thresholds are ours, set from the real annual swing BTS shows for DTW
+ * (about 0.90-1.05x seasonal load factor on top of day-of-week variation
+ * of a similar size, so day-level index realistically spans roughly
+ * 75-135 across a year) — not lifted from any reference, and not the same
+ * 0-1 ratio scale demandTier() uses, since 100 needs to land in the
+ * middle of this scale, not at the top of it. */
+export function dayIndexTier(index: number, isPeak: boolean): DemandTier {
+  if (isPeak) return { label: "Peak", className: "tier-peak" };
+  if (index >= 120) return { label: "Very high demand", className: "tier-very-high" };
+  if (index >= 105) return { label: "High demand", className: "tier-high" };
+  if (index >= 90) return { label: "Moderate demand", className: "tier-moderate" };
+  if (index >= 75) return { label: "Low demand", className: "tier-low" };
+  return { label: "Very low demand", className: "tier-very-low" };
+}
+
 export function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;

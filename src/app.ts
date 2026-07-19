@@ -1,5 +1,7 @@
-import type { Day, Daypart, Flight, Forecast } from "./lib/types";
+import type { Day, Daypart, Flight, Forecast, LocationManifestEntry } from "./lib/types";
+import type { DemandTier } from "./lib/format";
 import {
+  dayIndexTier,
   demandTier,
   formatAirlineName,
   formatDateRange,
@@ -21,6 +23,12 @@ interface State {
   dayIdx: number | null; // selection persists across views, per the brief
   selectedHour: number | null;
   selectedFlightId: number | null;
+  // Which windowDays-sized slice of forecast.days the range view is
+  // currently showing. jumpToDay/jumpToDayKeepView keep this in sync with
+  // whichever window the selected day actually lives in, so returning to
+  // the range view never silently strands the selection in a window
+  // that's no longer on screen.
+  windowIdx: number;
 }
 
 const STALE_THRESHOLD_MS = 48 * 60 * 60 * 1000;
@@ -36,9 +44,9 @@ const TERM_INFO: Record<string, string> = {
   loadFactor:
     "Share of seats filled, 0 to 1. The one modeled assumption in this forecast — everything else comes from the flight schedule. The footer shows the baseline; this flight's own value is that baseline adjusted for season and time of day, not an adjustable control.",
   geometryWeight:
-    "Estimated share of this gate's passengers who walk past A36, based on where the gate sits in the concourse.",
+    "Estimated share of this gate's passengers who walk past this location, based on where the gate sits in the concourse.",
   passengersPastA36:
-    "Estimated passengers from this flight walking past A36 in this hour: seats × load factor × geometry weight, spread across the hours the flight is in motion.",
+    "Estimated passengers from this flight walking past this location in this hour: seats × load factor × geometry weight, spread across the hours the flight is in motion.",
 };
 
 function infoTip(term: keyof typeof TERM_INFO, label: string, align: "left" | "right" = "left"): string {
@@ -118,7 +126,7 @@ function withTransition(fn: () => void): void {
   docWithTransitions.startViewTransition(fn);
 }
 
-/** Average and max per-flight contribution to A36 traffic, deduped by
+/** Average and max per-flight contribution to this location's traffic, deduped by
  * flightId (a flight appears once per hour it dwells in, so summing its
  * own passengersPastA36 across those rows recovers its one true total —
  * the same fact mdl.FlightExposure.Exposure holds server-side, just
@@ -140,14 +148,22 @@ function computeFlightExposureStats(forecast: Forecast): { avg: number; max: num
   return { avg, max };
 }
 
-export function mount(root: HTMLElement, forecast: Forecast): void {
+export function mount(
+  root: HTMLElement,
+  forecast: Forecast,
+  locations: LocationManifestEntry[],
+  onSwitchLocation: (forecastFile: string) => void
+): void {
   const state: State = {
     forecast,
     view: "range",
     dayIdx: null,
     selectedHour: null,
     selectedFlightId: null,
+    windowIdx: 0,
   };
+
+  document.title = `${forecast.location.displayName} — Inbound`;
 
   const flightExposureStats = computeFlightExposureStats(forecast);
 
@@ -155,7 +171,16 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
     <header class="page-header">
       <div class="brand">
         <div class="brand__eyebrow"><img class="brand__mark" src="/inbound-mark.png" alt="" />Inbound · Flight-driven demand signal</div>
-        <div class="brand__hero">Gate A36</div>
+        <span class="brand__hero-wrap">
+          <select class="brand__hero" id="location-picker" aria-label="Switch location">
+            ${locations
+              .map(
+                (loc) =>
+                  `<option value="${loc.forecastFile}" ${loc.locationId === forecast.location.locationId ? "selected" : ""}>${loc.airportCode} ${loc.gateLabel}</option>`
+              )
+              .join("")}
+          </select>
+        </span>
         <div class="brand__subtitle">Expected foot traffic in front of this location</div>
       </div>
       <div class="stat-card">
@@ -190,12 +215,34 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
   const statValueEl = root.querySelector<HTMLElement>("#stat-value")!;
   const statTierEl = root.querySelector<HTMLElement>("#stat-tier")!;
 
+  // A location switch tears down and reloads the whole app with a
+  // different location's own forecast file — not a re-render, since
+  // there's no meaningful selection to carry across two different
+  // airports' data the way a day selection carries across windows.
+  root.querySelector<HTMLSelectElement>("#location-picker")!.addEventListener("change", (e) => {
+    onSwitchLocation((e.target as HTMLSelectElement).value);
+  });
+
   // Updated by renderRows on every render so setupDragSelect always commits
   // through whichever handler (range vs. day view) is currently active.
   let activeRowHandler: { dataAttr: string; onClick: (key: number) => void } | null = null;
 
   function currentDay(): Day | undefined {
     return state.dayIdx === null ? undefined : state.forecast.days[state.dayIdx];
+  }
+
+  /** The windowDays-sized slice of forecast.days the range view currently
+   * shows — the range view's peak-day stat card and chart both scope to
+   * just this slice, not every day the export happens to carry, so
+   * switching windows always shows that window's own peak, not a global
+   * one that might not even be visible on screen. */
+  function currentWindowDays(): Day[] {
+    const wd = state.forecast.windowDays;
+    return state.forecast.days.slice(state.windowIdx * wd, state.windowIdx * wd + wd);
+  }
+
+  function totalWindows(): number {
+    return Math.ceil(state.forecast.days.length / state.forecast.windowDays);
   }
 
   function currentFlight(): Flight | undefined {
@@ -211,6 +258,7 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
   function jumpToDay(idx: number): void {
     withTransition(() => {
       state.dayIdx = idx;
+      state.windowIdx = Math.floor(idx / state.forecast.windowDays);
       state.view = "day";
       state.selectedHour = null;
       state.selectedFlightId = null;
@@ -219,12 +267,24 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
   }
 
   /** Day view: the breadcrumb date picker jumps to a different day while
-   * staying in the hour-by-hour view. */
+   * staying in the hour-by-hour view. Keeps windowIdx in sync too, so
+   * returning to the range view shows whichever window this day actually
+   * lives in instead of silently snapping back to the first one. */
   function jumpToDayKeepView(idx: number): void {
     state.dayIdx = idx;
+    state.windowIdx = Math.floor(idx / state.forecast.windowDays);
     state.selectedHour = null;
     state.selectedFlightId = null;
     render();
+  }
+
+  /** Range view: the window picker jumps to a different windowDays-sized
+   * slice of forecast.days without touching any existing day selection. */
+  function jumpToWindow(idx: number): void {
+    withTransition(() => {
+      state.windowIdx = idx;
+      render();
+    });
   }
 
   function goToRangeView(): void {
@@ -260,7 +320,7 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
   function renderStatCard(): void {
     let peakIndex: number;
     if (state.view === "range") {
-      const days = state.forecast.days;
+      const days = currentWindowDays();
       const peakIdx = days.reduce((best, d, i) => (d.dayIndex > days[best].dayIndex ? i : best), 0);
       statLabelEl.textContent = "Peak day";
       statValueEl.textContent = formatDayTitle(days[peakIdx].date);
@@ -284,19 +344,45 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
   function renderBreadcrumb(): void {
     const day = currentDay();
     const segments: string[] = [];
-    const days = state.forecast.days;
-    const dateRange = formatDateRange(days[0].date, days[days.length - 1].date);
+    const windowDays = state.forecast.windowDays;
+    const windows = totalWindows();
 
-    segments.push(`
-      <span class="breadcrumb__range">
-        <button class="range-nav-btn" id="range-prev" disabled title="This export covers one 14-day window" aria-label="Previous 14-day window">‹</button>
-        <button class="breadcrumb__seg breadcrumb__seg--stacked${state.view === "day" ? " is-link" : ""}" id="crumb-range">
-          <span class="breadcrumb__seg-secondary">14-day forecast</span>
-          <span class="breadcrumb__seg-primary">${dateRange}</span>
-        </button>
-        <button class="range-nav-btn" id="range-next" disabled title="This export covers one 14-day window" aria-label="Next 14-day window">›</button>
-      </span>
-    `);
+    if (state.view === "range") {
+      // The window picker replaces what used to be a pair of disabled
+      // arrows either side of a static date range — arrows small enough to
+      // be fiddly targets, and disabled ones at that, since this export
+      // only ever carried one window. A picker on the date range itself
+      // (same idiom as the day picker below) scales to however many
+      // windows the export actually has, no separate widget needed.
+      segments.push(`
+        <span class="breadcrumb__range">
+          <span class="breadcrumb__seg-secondary">${windowDays}-day forecast</span>
+          <span class="breadcrumb__picker-wrap">
+            <select class="breadcrumb__picker" id="crumb-window-picker" aria-label="Jump to a different ${windowDays}-day window">
+              ${Array.from({ length: windows }, (_, i) => {
+                const start = state.forecast.days[i * windowDays];
+                const end = state.forecast.days[Math.min((i + 1) * windowDays, state.forecast.days.length) - 1];
+                return `<option value="${i}" ${i === state.windowIdx ? "selected" : ""}>${formatDateRange(start.date, end.date)}</option>`;
+              }).join("")}
+            </select>
+          </span>
+        </span>
+      `);
+    } else {
+      // Shows the window the selected day actually lives in (kept in sync
+      // by jumpToDay/jumpToDayKeepView), so this always matches what's on
+      // screen after clicking back, not the export's full span.
+      const days = currentWindowDays();
+      const dateRange = formatDateRange(days[0].date, days[days.length - 1].date);
+      segments.push(`
+        <span class="breadcrumb__range">
+          <button class="breadcrumb__seg breadcrumb__seg--stacked is-link" id="crumb-range">
+            <span class="breadcrumb__seg-secondary">${windowDays}-day forecast</span>
+            <span class="breadcrumb__seg-primary">${dateRange}</span>
+          </button>
+        </span>
+      `);
+    }
 
     if (state.view === "day" && day) {
       segments.push(`
@@ -318,6 +404,9 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
 
     breadcrumbEl.querySelector("#crumb-range")?.addEventListener("click", () => {
       if (state.view === "day") goToRangeView();
+    });
+    breadcrumbEl.querySelector<HTMLSelectElement>("#crumb-window-picker")?.addEventListener("change", (e) => {
+      jumpToWindow(Number((e.target as HTMLSelectElement).value));
     });
     breadcrumbEl.querySelector<HTMLSelectElement>("#crumb-day-picker")?.addEventListener("change", (e) => {
       jumpToDayKeepView(Number((e.target as HTMLSelectElement).value));
@@ -349,13 +438,19 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
     // label above the row — this, not color, is how daypart is
     // communicated (see .row__fill: every bar is the same hue).
     sectionLabel?: string;
+    // Set only by the range view: dayIndexTier's fixed-baseline tier,
+    // precomputed by the caller since only it knows whether "relative to
+    // this window" (demandTier, the default below) or "relative to a real
+    // annual average" (dayIndexTier) is the right comparison for what
+    // it's rendering.
+    tier?: DemandTier;
   }
 
   function renderRows(items: RowItem[], maxValue: number, dataAttr: string, onClick: (key: number) => void): void {
     chartEl.innerHTML = items
       .map((item, i) => {
         const mag = Math.max(4, (item.value / maxValue) * 100);
-        const tier = demandTier(item.value / maxValue, item.isPeak);
+        const tier = item.tier ?? demandTier(item.value / maxValue, item.isPeak);
         // The tier column reads better bare ("High", "Peak") than repeating
         // "demand" on every row; the fuller "Very high demand" phrasing is
         // kept where it appears standalone (stat card, hero block).
@@ -448,19 +543,28 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
   // ---------- range view: 14 day rows ----------
 
   function renderRangeChart(): void {
-    const days = state.forecast.days;
+    // Scoped to the currently-selected window, not every day the export
+    // carries — the peak marker, bar scaling, and preview-cycle divider
+    // all mean "within what's on screen right now," the same as they did
+    // back when a window was the whole export.
+    const days = currentWindowDays();
+    const windowOffset = state.windowIdx * state.forecast.windowDays;
     const maxIndex = Math.max(...days.map((d) => d.dayIndex), 1);
     const peakIdx = days.reduce((best, d, i) => (d.dayIndex > days[best].dayIndex ? i : best), 0);
     const cycleLen = state.forecast.orderCycleDays;
 
     renderRows(
       days.map((d, i) => ({
-        key: i,
+        // The global index into forecast.days, not the position within
+        // this window slice — jumpToDay/isSelected both compare against
+        // state.dayIdx, which is always a global index.
+        key: windowOffset + i,
         label: formatDayTitle(d.date),
         value: d.dayIndex,
         isPeak: i === peakIdx,
-        isSelected: i === state.dayIdx,
+        isSelected: windowOffset + i === state.dayIdx,
         isPreview: i >= cycleLen,
+        tier: dayIndexTier(d.dayIndex, i === peakIdx),
       })),
       maxIndex,
       "day-idx",
@@ -601,8 +705,8 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
                   <th scope="col">Flight</th>
                   <th scope="col">Scheduled</th>
                   <th scope="col">
-                    <span class="flight-table__th-label">Pax past A36</span>
-                    ${infoTip("passengersPastA36", "pax past A36", "right")}
+                    <span class="flight-table__th-label">Pax past ${state.forecast.location.gateLabel}</span>
+                    ${infoTip("passengersPastA36", "pax past this gate", "right")}
                   </th>
                 </tr>
               </thead>
@@ -643,10 +747,11 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
   }
 
   function renderFlightDetail(f: Flight): string {
+    const { airportCode: homeCode, city: homeCity } = state.forecast.location;
     const [leftCode, leftCity, rightCode, rightCity] =
       f.direction === "departure"
-        ? ["DTW", "Detroit", f.otherAirportCode, f.otherAirportCity]
-        : [f.otherAirportCode, f.otherAirportCity, "DTW", "Detroit"];
+        ? [homeCode, homeCity, f.otherAirportCode, f.otherAirportCity]
+        : [f.otherAirportCode, f.otherAirportCity, homeCode, homeCity];
 
     const lfTier = loadFactorTier(f.loadFactor);
     const gwTier = geometryWeightTier(f.geometryWeight);
@@ -709,8 +814,8 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
 
       <div class="passenger-card">
         <div class="detail__eyebrow-row">
-          <span class="detail__eyebrow">Expected passengers past A36</span>
-          ${infoTip("passengersPastA36", "passengers past A36")}
+          <span class="detail__eyebrow">Expected passengers past ${state.forecast.location.gateLabel}</span>
+          ${infoTip("passengersPastA36", "passengers past this gate")}
         </div>
         <div class="passenger-card__row">
           <div class="passenger-card__value">${f.passengersPastA36.toFixed(1)}</div>
@@ -746,7 +851,7 @@ export function mount(root: HTMLElement, forecast: Forecast): void {
 
       <div class="about-card">
         <span class="about-card__icon">ⓘ</span>
-        <div class="about-card__body">This flight is expected to contribute ${isAbove ? "above" : "below"}-average foot traffic in front of Gate A36, based on its scheduled time and gate location.</div>
+        <div class="about-card__body">This flight is expected to contribute ${isAbove ? "above" : "below"}-average foot traffic in front of ${state.forecast.location.displayName}, based on its scheduled time and gate location.</div>
       </div>
     `;
   }

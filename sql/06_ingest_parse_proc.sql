@@ -11,15 +11,15 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE @Direction VARCHAR(10), @RequestedDate DATE, @RawJson NVARCHAR(MAX);
-    SELECT @Direction = Direction, @RequestedDate = RequestedDate, @RawJson = RawResponseJson
+    DECLARE @Direction VARCHAR(10), @RequestedDate DATE, @AirportCode CHAR(3), @RawJson NVARCHAR(MAX);
+    SELECT @Direction = Direction, @RequestedDate = RequestedDate, @AirportCode = AirportCode, @RawJson = RawResponseJson
     FROM stg.ApiIngestBatch
     WHERE BatchId = @BatchId;
 
-    -- Direction picks which side of the payload is the DTW leg: for a
-    -- departure query DTW is always "departure.*"; for an arrival query
-    -- DTW is always "arrival.*". The other side is always the other
-    -- airport, regardless of query direction.
+    -- Direction picks which side of the payload is @AirportCode's own leg:
+    -- for a departure query @AirportCode is always "departure.*"; for an
+    -- arrival query it's always "arrival.*". The other side is always the
+    -- other airport, regardless of query direction.
     ;WITH Raw AS (
         SELECT
             JSON_VALUE(j.value, '$.airline.name') AS AirlineName,
@@ -35,9 +35,9 @@ BEGIN
             -- sell seats on it, so only rows WITHOUT this block survive.
             JSON_VALUE(j.value, '$.codeshared.flight.iataNumber') AS CodesharedFlag,
             UPPER(CASE WHEN @Direction = 'departure' THEN JSON_VALUE(j.value, '$.departure.gate')
-                       ELSE JSON_VALUE(j.value, '$.arrival.gate') END) AS DtwGate,
+                       ELSE JSON_VALUE(j.value, '$.arrival.gate') END) AS Gate,
             CASE WHEN @Direction = 'departure' THEN JSON_VALUE(j.value, '$.departure.scheduledTime')
-                 ELSE JSON_VALUE(j.value, '$.arrival.scheduledTime') END AS DtwTimeText,
+                 ELSE JSON_VALUE(j.value, '$.arrival.scheduledTime') END AS TimeText,
             UPPER(CASE WHEN @Direction = 'departure' THEN JSON_VALUE(j.value, '$.arrival.iataCode')
                        ELSE JSON_VALUE(j.value, '$.departure.iataCode') END) AS OtherIata
         FROM OPENJSON(@RawJson) j
@@ -47,12 +47,12 @@ BEGIN
         AirlineIataCode,
         FlightNumber,
         AircraftModelCode,
-        COALESCE(DtwGate, '') AS DtwGate,
+        COALESCE(Gate, '') AS Gate,
         OtherIata,
         -- scheduledTime is a bare "HH:MM", no date or timezone — combine
         -- with the date this batch was requested for. TRY_CONVERT so a
         -- malformed/missing time drops the row instead of failing the batch.
-        TRY_CONVERT(DATETIME2(0), CONVERT(VARCHAR(10), @RequestedDate, 120) + ' ' + DtwTimeText + ':00') AS DtwScheduledTime
+        TRY_CONVERT(DATETIME2(0), CONVERT(VARCHAR(10), @RequestedDate, 120) + ' ' + TimeText + ':00') AS ScheduledTime
     INTO #Operating
     FROM Raw
     WHERE CodesharedFlag IS NULL
@@ -73,32 +73,35 @@ BEGIN
     -- airports' timezones) — left NULL rather than guessed; the front end
     -- omits the duration line when it's missing.
     INSERT INTO stg.Flight (
-        BatchId, Direction, AirlineName, AirlineIataCode, FlightNumber, AircraftModelCode,
-        DtwGate, DtwScheduledTime, OtherAirportCode, OtherAirportCity, DurationMinutes
+        BatchId, AirportCode, Direction, AirlineName, AirlineIataCode, FlightNumber, AircraftModelCode,
+        Gate, ScheduledTime, OtherAirportCode, OtherAirportCity, DurationMinutes
     )
     SELECT
-        @BatchId, @Direction, o.AirlineName, o.AirlineIataCode, o.FlightNumber, o.AircraftModelCode,
-        o.DtwGate, o.DtwScheduledTime, o.OtherIata, COALESCE(ac.City, o.OtherIata), NULL
+        @BatchId, @AirportCode, @Direction, o.AirlineName, o.AirlineIataCode, o.FlightNumber, o.AircraftModelCode,
+        o.Gate, o.ScheduledTime, o.OtherIata, COALESCE(ac.City, o.OtherIata), NULL
     FROM #Operating o
     LEFT JOIN cfg.AirportCity ac ON ac.IataCode = o.OtherIata
-    WHERE o.DtwScheduledTime IS NOT NULL
+    WHERE o.ScheduledTime IS NOT NULL
       AND o.FlightNumber IS NOT NULL;
 
     -- Learn from whatever gate this batch DID see, so a future ingest of
     -- the same recurring flight number with a still-blank gate has
     -- something to fall back to (see mdl.FlightExposure's BestHistoricalGate).
+    -- Scoped by AirportCode since a flight number is only meaningful within
+    -- one airport's schedule.
     MERGE stg.GateHistory AS tgt
     USING (
-        SELECT DISTINCT FlightNumber, @Direction AS Direction, DtwGate AS Gate
+        SELECT DISTINCT FlightNumber, @Direction AS Direction, @AirportCode AS AirportCode, Gate
         FROM #Operating
-        WHERE DtwGate IS NOT NULL AND DtwGate <> ''
+        WHERE Gate IS NOT NULL AND Gate <> ''
     ) AS src
-        ON tgt.FlightNumber = src.FlightNumber AND tgt.Direction = src.Direction AND tgt.Gate = src.Gate
+        ON tgt.AirportCode = src.AirportCode AND tgt.FlightNumber = src.FlightNumber
+        AND tgt.Direction = src.Direction AND tgt.Gate = src.Gate
     WHEN MATCHED THEN
         UPDATE SET ObservedCount = tgt.ObservedCount + 1, LastSeenAt = SYSUTCDATETIME()
     WHEN NOT MATCHED THEN
-        INSERT (FlightNumber, Direction, Gate, ObservedCount, LastSeenAt)
-        VALUES (src.FlightNumber, src.Direction, src.Gate, 1, SYSUTCDATETIME());
+        INSERT (AirportCode, FlightNumber, Direction, Gate, ObservedCount, LastSeenAt)
+        VALUES (src.AirportCode, src.FlightNumber, src.Direction, src.Gate, 1, SYSUTCDATETIME());
 
     DROP TABLE #Operating;
 END

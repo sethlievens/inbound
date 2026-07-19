@@ -7,7 +7,7 @@
 const MESSAGES = [
   "Requesting clearance for descent...",
   "Extending landing gear...",
-  "Taxiing data to Gate A36...",
+  "Taxiing data to the gate...",
   "Compiling passenger manifests...",
   "Cross-referencing gate assignments...",
   "Calculating dwell curves...",

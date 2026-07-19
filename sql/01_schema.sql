@@ -204,3 +204,25 @@ CREATE TABLE cfg.CargoAirline (
     IataCode    VARCHAR(5)  NULL
 );
 GO
+
+-- ============================================================
+-- Real historical calibration data, from BTS (data.bts.gov's
+-- Socrata mirror of the T-100 Segment table), not from the live
+-- 14-day Aviation Edge window. Aviation Edge is a forward-looking
+-- schedule that can't see a year back, so it can tell us today's
+-- flights but not whether today is a seasonally busy or quiet
+-- month — that's exactly what a 14-day snapshot can't answer and
+-- BTS's monthly actuals can. This is raw ingest, untouched by the
+-- transform layer, same as stg.Flight.
+-- ============================================================
+CREATE TABLE stg.BtsMonthlyVolume (
+    AirportCode     CHAR(3)      NOT NULL,
+    ReportingMonth  DATE         NOT NULL,   -- first of the month
+    TotalDepartures INT          NOT NULL,
+    TotalPassengers INT          NOT NULL,
+    TotalSeats      INT          NOT NULL,
+    TotalLoadFactor DECIMAL(5,2) NOT NULL,   -- as reported by BTS, e.g. 82.60 (percent)
+    IngestedAt      DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT PK_BtsMonthlyVolume PRIMARY KEY (AirportCode, ReportingMonth)
+);
+GO

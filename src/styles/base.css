@@ -130,6 +130,46 @@ button {
   }
 }
 
+/* The hero heading is a native <select> — clicking "DTW A36" opens the
+   location picker, same idiom as the breadcrumb's day/window pickers
+   below. Resets to read as plain display text until interacted with. */
+.brand__hero-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+select.brand__hero {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font-family: inherit;
+  padding-right: 0.7em;
+  cursor: pointer;
+}
+
+select.brand__hero:hover {
+  color: var(--accent-bright);
+}
+
+select.brand__hero option {
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.brand__hero-wrap::after {
+  content: "▾";
+  position: absolute;
+  right: 0;
+  top: 0.5em;
+  font-size: 0.35em;
+  color: var(--ink-secondary);
+  pointer-events: none;
+}
+
 .brand__subtitle {
   font-size: 15px;
   color: var(--ink-secondary);
@@ -245,19 +285,6 @@ button {
 .breadcrumb__sep {
   font-size: 16px;
   color: var(--ink-secondary);
-}
-
-/* Range navigation (jump the whole 14-day window) — visually distinct from
-   the selection nudge that lives with the detail panel, per the brief's
-   rule that the two motions must never look alike or share placement.
-   Both arrows stay disabled: this export covers exactly one window. */
-.range-nav-btn {
-  border: none;
-  background: none;
-  color: rgba(255, 255, 255, 0.2);
-  font-size: 15px;
-  cursor: default;
-  padding: var(--space-2);
 }
 
 /* The day segment becomes a native <select> in day view, so it doubles as

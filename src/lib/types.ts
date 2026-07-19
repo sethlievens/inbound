@@ -56,10 +56,29 @@ export interface DaypartWindow {
   endHour: number;
 }
 
+export interface Location {
+  locationId: number;
+  airportCode: string;
+  gateLabel: string;
+  displayName: string;
+  terminalName: string;
+  city: string;
+}
+
+// The picker's source list — public/data/locations.json. A separate, much
+// smaller artifact than any one location's forecast, so the picker can
+// list what else is available without fetching every location's full
+// forecast just to read their names.
+export interface LocationManifestEntry extends Location {
+  forecastFile: string; // -> /data/forecast-{forecastFile}.json
+}
+
 export interface Forecast {
   generatedAt: string;
   source: string;
   orderCycleDays: number;
+  windowDays: number; // one window's span in days; days.length is a multiple of this
+  location: Location;
   defaultLoadFactor: number;
   openHoursByDayOfWeek: OpenHoursEntry[];
   daypartWindows: DaypartWindow[];
