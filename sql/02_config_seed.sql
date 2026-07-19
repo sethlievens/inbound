@@ -101,6 +101,7 @@ INSERT INTO cfg.SeatsByAircraftType (AircraftModelCode, AircraftModelText, Seats
     ('DH8D', 'De Havilland Dash 8-400',    76),
     ('C208', 'Cessna 208B Grand Caravan',   9),
     ('BE36', 'Beechcraft Bonanza G36',      5),
+    ('PC12', 'Pilatus PC-12',               9),
     ('B77W', 'Boeing 777-300ER',          296),
     ('B77L', 'Boeing 777-200LR',          301),
     ('B764', 'Boeing 767-400ER',          261),
