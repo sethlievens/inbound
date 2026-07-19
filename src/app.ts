@@ -58,11 +58,14 @@ function infoTip(term: keyof typeof TERM_INFO, label: string, align: "left" | "r
   `;
 }
 
-// Self-hosted widget marks (public/airlines/), not hotlinked. Only Delta is
-// wired up since the demo dataset is Delta-only; any other carrier code
-// falls back to a plain text badge rather than a missing-image icon.
+// Self-hosted widget marks (public/airlines/), not hotlinked — the four
+// busiest carriers across the six locations. Any other carrier code falls
+// back to a plain text badge rather than a missing-image icon.
 const AIRLINE_LOGOS: Record<string, string> = {
   DL: "/airlines/delta.svg",
+  AA: "/airlines/american.svg",
+  UA: "/airlines/united.svg",
+  WN: "/airlines/southwest.svg",
 };
 
 /** Badge/logo keyed off the flight's own airlineIataCode, straight from

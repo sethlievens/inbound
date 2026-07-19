@@ -997,6 +997,10 @@ select.brand__hero option {
   width: 26px;
   height: 26px;
   border-radius: 50%;
+  /* Delta's mark has transparent margins so this was never visible before,
+     but a logo drawn on a solid-filled square (no transparent corners)
+     would otherwise poke past the circular badge shape. */
+  overflow: hidden;
   background: var(--accent-dim);
   color: var(--accent-bright);
   display: flex;
