@@ -122,8 +122,16 @@ BEGIN
                 dshp.DayOfWeekName AS dayOfWeek,
                 dshp.OpenHour AS openHour,
                 dshp.CloseHour AS closeHour,
-                dr.DayIndex AS dayIndex,
-                dr.PeakHour AS peakHour,
+                -- COALESCE, not a bare column: FOR JSON PATH omits a key
+                -- entirely (not even JSON null) when its value is NULL, which
+                -- it is here for any date with no ingested flights yet (the
+                -- pre-lookahead-floor days). An omitted key becomes
+                -- `undefined` in JS, and Math.max/comparisons against
+                -- `undefined` all resolve to NaN — which is exactly what
+                -- broke every range-view bar's width and stranded the peak
+                -- marker on day 0. Same fix pattern as TrafficIndex below.
+                COALESCE(dr.DayIndex, 0) AS dayIndex,
+                COALESCE(dr.PeakHour, dshp.OpenHour) AS peakHour,
                 JSON_QUERY((
                     SELECT
                         hsh.TrafficHour AS hour,
