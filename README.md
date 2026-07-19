@@ -51,18 +51,6 @@ exposure = seats(aircraftType) × loadFactor × geometryWeight(gate)
 
 Every model constant (load factor, gate zone weights, dwell curve timing, daypart windows) lives in a config table, not a literal in a view. Retuning the model is an `UPDATE` statement, not a redeploy.
 
-## What broke when real data replaced the demo dataset
-
-The pipeline was built and demoed against a hand-tuned dataset first, then pointed at Aviation Edge's live schedule API. Real data surfaced problems no amount of demo-data tuning would have caught:
-
-- **The API has a minimum lookahead, not just a soft quality ceiling.** Anything within about a week of the request date is hard-rejected. The 14-day forecast window now starts eight days out instead of today, since the near days simply can't be queried yet.
-- **Codeshares list the same physical flight multiple times**, once per marketing airline. One DTW to Charlotte departure came back five times under five different airline codes. Only the operating carrier's row gets kept.
-- **Nearly half of gates are blank this far out.** Rather than let a missing gate silently zero out a flight's contribution, each ingest that does see a real gate for a given recurring flight number remembers it, so the next ingest with a blank gate can fall back to whatever that flight has actually been observed at. It's a small self-improving table, not a hardcoded guess.
-- **A gate string isn't always a Concourse A gate.** Other carriers fly out of DTW's separate North Terminal, at gate numbers that looked numerically valid but were nowhere near A36. Gate parsing now checks that the gate string actually starts with "A" before treating it as a Concourse A location.
-- **Aircraft variety was much wider than the hand-tuned seat lookup covered.** An unrecognized aircraft type now falls back to a plausible average seat count instead of silently dropping the flight from the model entirely.
-
-None of this is speculative hardening. Each one showed up in a real API response and would have quietly thinned or corrupted the curve if left alone.
-
 ## The interface
 
 Two views, phone-first, no charting library. Bars are hand-rolled SVG and CSS because a charting library's defaults would fight the type system and spacing this design depends on.
