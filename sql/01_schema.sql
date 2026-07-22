@@ -205,6 +205,38 @@ CREATE TABLE cfg.CargoAirline (
 );
 GO
 
+-- Aviation Edge's predicted schedule for Southwest at CMH is genuinely
+-- sparse on Mondays and Tuesdays (confirmed repeatedly against the raw,
+-- unmodified API response — not an ingest bug, a real gap in that one
+-- upstream feed for that one airline/airport/day-of-week combination).
+-- Southwest's own real public route list shows most CMH routes flying
+-- daily, so a normal Thursday's real, already-ingested schedule (same
+-- routes, gates, and times a carrier typically repeats week to week)
+-- stands in as the Monday/Tuesday/Wednesday template until Aviation
+-- Edge's own data improves. Applied by ingest_aviation_edge.sh after
+-- every real ingest, every week, not a one-time patch.
+--
+-- Not seeded in 02_config_seed.sql — its rows are captured from a real
+-- ingest, not hand-authored config. To (re)populate it, pick any
+-- currently-healthy Thursday already in stg.Flight and run:
+--   DELETE FROM cfg.SouthwestCmhTemplate;
+--   INSERT INTO cfg.SouthwestCmhTemplate (FlightNumber, Direction, TimeOfDay, Gate, AircraftModelCode, OtherAirportCode, OtherAirportCity, DurationMinutes)
+--   SELECT FlightNumber, Direction, CAST(ScheduledTime AS TIME), Gate, AircraftModelCode, OtherAirportCode, OtherAirportCity, DurationMinutes
+--   FROM stg.Flight
+--   WHERE AirportCode = 'CMH' AND AirlineName LIKE 'southwest%' AND CAST(ScheduledTime AS DATE) = '<a healthy Thursday>';
+CREATE TABLE cfg.SouthwestCmhTemplate (
+    TemplateId        INT IDENTITY PRIMARY KEY,
+    FlightNumber      VARCHAR(10) NOT NULL,
+    Direction         VARCHAR(10) NOT NULL,
+    TimeOfDay         TIME        NOT NULL,
+    Gate              VARCHAR(10) NOT NULL,
+    AircraftModelCode VARCHAR(10) NOT NULL,
+    OtherAirportCode  CHAR(3)     NULL,
+    OtherAirportCity  VARCHAR(50) NULL,
+    DurationMinutes   INT         NULL
+);
+GO
+
 -- ============================================================
 -- Real historical calibration data, from BTS (data.bts.gov's
 -- Socrata mirror of the T-100 Segment table), not from the live

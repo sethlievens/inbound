@@ -151,8 +151,14 @@ PYEOF
     TEMPLATE_DATE="$(date_offset $((i + 14)))"
     "$SQLCMD" -S "$SQLCMDSERVER" -C -U "$SQLCMDUSER" -d Inbound -Q "
     DELETE FROM stg.Flight WHERE AirportCode = '$AIRPORT' AND CAST(ScheduledTime AS DATE) = '$BLIND_DATE';
+    -- BatchId is NULL, not copied from the template row: a copied row
+    -- doesn't belong to that batch's own RequestedDate, and once the
+    -- window rolls forward far enough for the template date to be
+    -- re-fetched for real, that re-fetch's own per-date DELETE would
+    -- otherwise hit this FK from an unrelated date and abort the whole
+    -- ingest (this happened once — see the git history on this line).
     INSERT INTO stg.Flight (BatchId, Direction, AirlineName, AirlineIataCode, FlightNumber, AircraftModelCode, Gate, ScheduledTime, OtherAirportCode, OtherAirportCity, DurationMinutes, AirportCode)
-    SELECT BatchId, Direction, AirlineName, AirlineIataCode, FlightNumber, AircraftModelCode, Gate,
+    SELECT NULL, Direction, AirlineName, AirlineIataCode, FlightNumber, AircraftModelCode, Gate,
            DATEADD(day, -14, ScheduledTime), OtherAirportCode, OtherAirportCity, DurationMinutes, AirportCode
     FROM stg.Flight
     WHERE AirportCode = '$AIRPORT' AND CAST(ScheduledTime AS DATE) = '$TEMPLATE_DATE';
@@ -160,5 +166,45 @@ PYEOF
     echo "  $AIRPORT blind-window backfill $BLIND_DATE (from $TEMPLATE_DATE): done" >&2
   done
 done
+
+# Aviation Edge's predicted schedule is genuinely sparse for Southwest at
+# CMH on Mondays/Tuesdays (confirmed repeatedly against the raw,
+# unmodified API response, including a same-day recheck — not an ingest
+# bug, and not fixed by retrying). cfg.SouthwestCmhTemplate holds one
+# real healthy weekday's worth of Southwest's CMH schedule; every
+# Monday/Tuesday/Wednesday across the whole exported window gets
+# replaced with it, every night, rather than a one-time manual patch
+# that a future real ingest would silently overwrite back to sparse.
+if echo "$AIRPORT_CODES" | grep -qw CMH; then
+  "$SQLCMD" -S "$SQLCMDSERVER" -C -U "$SQLCMDUSER" -d Inbound -Q "
+  DECLARE @Start DATE = '$TODAY';
+  DECLARE @End DATE = '$RANGE_END';
+
+  ;WITH Spine AS (
+      SELECT DATEADD(DAY, t.n, @Start) AS D FROM cfg.Tally t WHERE t.n <= DATEDIFF(DAY, @Start, @End)
+  ),
+  TargetDates AS (
+      SELECT D FROM Spine WHERE DATENAME(WEEKDAY, D) IN ('Monday','Tuesday','Wednesday')
+  )
+  DELETE f
+  FROM stg.Flight f
+  JOIN TargetDates td ON CAST(f.ScheduledTime AS DATE) = td.D
+  WHERE f.AirportCode = 'CMH' AND f.AirlineName LIKE 'southwest%';
+
+  ;WITH Spine AS (
+      SELECT DATEADD(DAY, t.n, @Start) AS D FROM cfg.Tally t WHERE t.n <= DATEDIFF(DAY, @Start, @End)
+  ),
+  TargetDates AS (
+      SELECT D FROM Spine WHERE DATENAME(WEEKDAY, D) IN ('Monday','Tuesday','Wednesday')
+  )
+  INSERT INTO stg.Flight (BatchId, Direction, AirlineName, AirlineIataCode, FlightNumber, AircraftModelCode, Gate, ScheduledTime, OtherAirportCode, OtherAirportCity, DurationMinutes, AirportCode)
+  SELECT NULL, tpl.Direction, 'southwest airlines', 'WN', tpl.FlightNumber, tpl.AircraftModelCode, tpl.Gate,
+         CAST(CONVERT(VARCHAR(10), td.D, 120) + ' ' + CONVERT(VARCHAR(8), tpl.TimeOfDay, 108) AS DATETIME2),
+         tpl.OtherAirportCode, tpl.OtherAirportCity, tpl.DurationMinutes, 'CMH'
+  FROM cfg.SouthwestCmhTemplate tpl
+  CROSS JOIN TargetDates td;
+  " -b
+  echo "CMH Southwest weekly template applied ($TODAY to $RANGE_END, Mon/Tue/Wed)." >&2
+fi
 
 echo "Ingest complete." >&2
