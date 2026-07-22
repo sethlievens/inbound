@@ -46,13 +46,13 @@ cd "$REPO_ROOT"
 SQLCMD_BIN="$SQLCMD_BIN" ./scripts/ingest_aviation_edge.sh
 SQLCMD_BIN="$SQLCMD_BIN" ASOF_DATE="$ASOF_DATE" ./scripts/export_forecast.sh
 
-if ! git diff --quiet -- public/data/forecast.json; then
-  git add public/data/forecast.json
+if ! git diff --quiet -- public/data/forecast-*.json public/data/locations.json; then
+  git add public/data/forecast-*.json public/data/locations.json
   git commit -m "Nightly forecast refresh: $ASOF_DATE"
   git push
-  echo "$(date -u '+%F %T') Committed and pushed updated forecast.json."
+  echo "$(date -u '+%F %T') Committed and pushed updated forecast data."
 else
-  echo "$(date -u '+%F %T') forecast.json unchanged, nothing to commit."
+  echo "$(date -u '+%F %T') Forecast data unchanged, nothing to commit."
 fi
 
 echo "$(date -u '+%F %T') Nightly refresh complete."
